@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vera.ai/schemas/verification.json",
+  "title": "Verification",
+  "type": "object",
+  "required": [
+    "id",
+    "investigation_id",
+    "target_type",
+    "target_identifier",
+    "verifier",
+    "status",
+    "verdict",
+    "created_at"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "investigation_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "target_type": {
+      "type": "string",
+      "enum": ["sebi_intermediary", "whois_domain", "apk_signature", "bank_account", "phone_reputation"]
+    },
+    "target_identifier": {
+      "type": "string"
+    },
+    "verifier": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["SUCCESS", "PARTIAL", "FAILED", "UNAVAILABLE", "NOT_VERIFIED", "INSUFFICIENT_EVIDENCE"]
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["VALID", "INVALID", "SUSPICIOUS", "UNVERIFIED", "FRAUDULENT"]
+    },
+    "details": {
+      "type": "object"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false
+}

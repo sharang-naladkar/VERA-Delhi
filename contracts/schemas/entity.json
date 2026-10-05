@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vera.ai/schemas/entity.json",
+  "title": "Entity",
+  "type": "object",
+  "required": ["id", "investigation_id", "entity_type", "name", "created_at"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "investigation_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "entity_type": {
+      "type": "string",
+      "enum": [
+        "individual",
+        "organization",
+        "telegram_channel",
+        "whatsapp_group",
+        "bank_account",
+        "upi_id",
+        "phone_number",
+        "domain",
+        "app_package"
+      ]
+    },
+    "name": {
+      "type": "string"
+    },
+    "identifier": {
+      "type": ["string", "null"]
+    },
+    "risk_level": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "critical", "unknown"]
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false
+}

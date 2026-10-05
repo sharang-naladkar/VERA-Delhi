@@ -1,0 +1,260 @@
+openapi: 3.1.0
+info:
+  title: VERA - Agentic AI Investment Fraud Investigation API
+  version: 0.1.0
+  description: >
+    OpenAPI contract for VERA (Verification, Evidence, Risk & Analysis) platform.
+    Phase 01: Core foundation, health/readiness probes, and investigation lifecycle.
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+paths:
+  /health:
+    get:
+      summary: Liveness Probe
+      description: Returns basic liveness status of the API service.
+      operationId: getHealth
+      tags:
+        - System
+      responses:
+        '200':
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /health/ready:
+    get:
+      summary: Readiness Probe
+      description: Checks connectivity to critical dependencies (PostgreSQL, Redis, MinIO).
+      operationId: getReadiness
+      tags:
+        - System
+      responses:
+        '200':
+          description: All dependencies ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+        '503':
+          description: One or more dependencies are unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+
+  /v1/investigations:
+    post:
+      summary: Create Investigation
+      description: Initializes a new fraud investigation workflow record.
+      operationId: createInvestigation
+      tags:
+        - Investigations
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInvestigationRequest'
+      responses:
+        '201':
+          description: Investigation created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvestigationResponse'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/investigations/{investigation_id}:
+    get:
+      summary: Get Investigation
+      description: Retrieves status and details of an existing investigation by ID.
+      operationId: getInvestigationById
+      tags:
+        - Investigations
+      parameters:
+        - name: investigation_id
+          in: path
+          required: true
+          description: Unique UUID of the investigation
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Investigation details retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvestigationResponse'
+        '404':
+          description: Investigation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error (invalid UUID format)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - version
+        - timestamp
+      properties:
+        status:
+          type: string
+          example: "ok"
+        version:
+          type: string
+          example: "0.1.0"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-10-05T12:00:00Z"
+
+    DependencyStatus:
+      type: object
+      required:
+        - status
+        - message
+      properties:
+        status:
+          type: string
+          enum: [ "ready", "unavailable", "degraded" ]
+          example: "ready"
+        message:
+          type: string
+          example: "Connected successfully"
+        latency_ms:
+          type: number
+          nullable: true
+          example: 2.45
+
+    ReadinessResponse:
+      type: object
+      required:
+        - status
+        - timestamp
+        - services
+      properties:
+        status:
+          type: string
+          enum: [ "ready", "degraded", "unavailable" ]
+          example: "ready"
+        timestamp:
+          type: string
+          format: date-time
+        services:
+          type: object
+          properties:
+            database:
+              $ref: '#/components/schemas/DependencyStatus'
+            redis:
+              $ref: '#/components/schemas/DependencyStatus'
+            minio:
+              $ref: '#/components/schemas/DependencyStatus'
+
+    CreateInvestigationRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          nullable: true
+          example: "Suspicious Telegram Trading Scheme"
+        description:
+          type: string
+          nullable: true
+          example: "Investigation of fake SEBI registered advisor group"
+        metadata:
+          type: object
+          additionalProperties: true
+
+    InvestigationResponse:
+      type: object
+      required:
+        - id
+        - status
+        - vera_version
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
+        title:
+          type: string
+          nullable: true
+          example: "Suspicious Telegram Trading Scheme"
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum:
+            - SUCCESS
+            - PARTIAL
+            - FAILED
+            - UNAVAILABLE
+            - NOT_VERIFIED
+            - INSUFFICIENT_EVIDENCE
+            - PENDING
+            - created
+          example: "created"
+        vera_version:
+          type: string
+          example: "0.1.0"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ErrorDetail:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          example: "NOT_FOUND"
+        message:
+          type: string
+          example: "Investigation with ID 9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d not found."
+        request_id:
+          type: string
+          example: "req-4a84f3e1-92be-4a57-b2dc-d6f9a0ec4917"
+        details:
+          type: object
+          nullable: true
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          $ref: '#/components/schemas/ErrorDetail'

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vera.ai/schemas/risk.json",
+  "title": "RiskAssessment",
+  "type": "object",
+  "required": [
+    "id",
+    "investigation_id",
+    "overall_score",
+    "risk_band",
+    "risk_breakdown",
+    "created_at"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "investigation_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "overall_score": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 100.0
+    },
+    "risk_band": {
+      "type": "string",
+      "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INCONCLUSIVE"]
+    },
+    "risk_breakdown": {
+      "type": "object",
+      "properties": {
+        "regulatory_risk": { "type": "number" },
+        "forensic_risk": { "type": "number" },
+        "claims_risk": { "type": "number" },
+        "technical_risk": { "type": "number" }
+      }
+    },
+    "primary_factors": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["SUCCESS", "PARTIAL", "FAILED", "UNAVAILABLE", "INSUFFICIENT_EVIDENCE"]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false
+}

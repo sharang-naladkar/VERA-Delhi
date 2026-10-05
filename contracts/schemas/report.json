@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vera.ai/schemas/report.json",
+  "title": "InvestigationReport",
+  "type": "object",
+  "required": [
+    "id",
+    "investigation_id",
+    "title",
+    "executive_summary",
+    "risk_level",
+    "status",
+    "generated_at"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "investigation_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "title": {
+      "type": "string"
+    },
+    "executive_summary": {
+      "type": "string"
+    },
+    "risk_level": {
+      "type": "string",
+      "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INCONCLUSIVE"]
+    },
+    "evidence_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "key_findings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "recommended_actions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["SUCCESS", "PARTIAL", "FAILED", "UNAVAILABLE", "INSUFFICIENT_EVIDENCE"]
+    },
+    "artifact_url": {
+      "type": ["string", "null"]
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false
+}

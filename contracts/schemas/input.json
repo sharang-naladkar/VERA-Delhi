@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vera.ai/schemas/input.json",
+  "title": "EvidenceInput",
+  "type": "object",
+  "required": ["id", "investigation_id", "input_type", "status", "created_at"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "investigation_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "input_type": {
+      "type": "string",
+      "enum": ["text", "image", "video", "audio", "url", "apk", "profile", "phone", "upi"]
+    },
+    "storage_key": {
+      "type": ["string", "null"]
+    },
+    "mime_type": {
+      "type": ["string", "null"]
+    },
+    "file_size_bytes": {
+      "type": ["integer", "null"]
+    },
+    "raw_text": {
+      "type": ["string", "null"]
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["PENDING", "SUCCESS", "FAILED", "PARTIAL", "UNAVAILABLE"]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false
+}

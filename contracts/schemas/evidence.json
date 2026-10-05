@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vera.ai/schemas/evidence.json",
+  "title": "Evidence",
+  "type": "object",
+  "required": [
+    "id",
+    "investigation_id",
+    "type",
+    "category",
+    "severity",
+    "confidence",
+    "description",
+    "source_type",
+    "source_name",
+    "status",
+    "created_at"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "investigation_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "input_id": {
+      "type": ["string", "null"],
+      "format": "uuid"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "risk_signal",
+        "forensic_artifact",
+        "entity_detection",
+        "regulatory_check",
+        "url_analysis",
+        "apk_analysis",
+        "audio_transcription",
+        "ocr_extraction",
+        "deepfake_analysis"
+      ]
+    },
+    "category": {
+      "type": "string"
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "critical", "informational"]
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "description": {
+      "type": "string"
+    },
+    "source_type": {
+      "type": "string",
+      "enum": ["model", "heuristic", "database", "human_expert", "third_party_api"]
+    },
+    "source_name": {
+      "type": "string"
+    },
+    "source_version": {
+      "type": ["string", "null"]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "SUCCESS",
+        "PARTIAL",
+        "FAILED",
+        "UNAVAILABLE",
+        "NOT_VERIFIED",
+        "INSUFFICIENT_EVIDENCE",
+        "PENDING",
+        "success"
+      ]
+    },
+    "raw_payload": {
+      "type": ["object", "null"]
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false
+}

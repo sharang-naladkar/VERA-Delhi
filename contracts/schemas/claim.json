@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vera.ai/schemas/claim.json",
+  "title": "Claim",
+  "type": "object",
+  "required": ["id", "investigation_id", "statement", "claim_type", "created_at"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "investigation_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "input_id": {
+      "type": ["string", "null"],
+      "format": "uuid"
+    },
+    "statement": {
+      "type": "string"
+    },
+    "claim_type": {
+      "type": "string",
+      "enum": [
+        "guaranteed_return",
+        "sebi_registration",
+        "insider_tip",
+        "celebrity_endorsement",
+        "institutional_backing",
+        "urgency_pressure"
+      ]
+    },
+    "extracted_figures": {
+      "type": "object"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false
+}

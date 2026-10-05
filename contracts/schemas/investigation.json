@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vera.ai/schemas/investigation.json",
+  "title": "Investigation",
+  "type": "object",
+  "required": ["id", "status", "vera_version", "created_at", "updated_at"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "title": {
+      "type": ["string", "null"]
+    },
+    "description": {
+      "type": ["string", "null"]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "SUCCESS",
+        "PARTIAL",
+        "FAILED",
+        "UNAVAILABLE",
+        "NOT_VERIFIED",
+        "INSUFFICIENT_EVIDENCE",
+        "PENDING",
+        "created"
+      ]
+    },
+    "vera_version": {
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false
+}

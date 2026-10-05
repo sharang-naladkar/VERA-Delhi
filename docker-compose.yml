@@ -1,0 +1,105 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: vera-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-vera_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vera_password}
+      POSTGRES_DB: ${POSTGRES_DB:-vera_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vera_user} -d ${POSTGRES_DB:-vera_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: vera-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  minio:
+    image: minio/minio:RELEASE.2024-09-22T00-33-43Z-cpuv1
+    container_name: vera-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-vera_minio_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-vera_minio_secret}
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    container_name: vera-api
+    restart: unless-stopped
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-vera_user}:${POSTGRES_PASSWORD:-vera_password}@postgres:5432/${POSTGRES_DB:-vera_db}
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-vera_minio_admin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-vera_minio_secret}
+      MINIO_BUCKET: ${MINIO_BUCKET:-vera-artifacts}
+      CORS_ORIGINS: "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://localhost"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: .
+      dockerfile: infra/docker/frontend.Dockerfile
+    container_name: vera-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
