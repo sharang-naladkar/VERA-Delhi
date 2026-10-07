@@ -16,8 +16,9 @@ export class ApiError extends Error {
   }
 }
 
-// In Vite development, either use proxy '/api' or full VITE_API_BASE_URL
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+// In Vite development, the Vite proxy handles '/api' → 'http://localhost:8000'.
+// In production (Docker/Nginx), Nginx proxies '/api/' → 'http://api:8000/'.
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 export async function apiClient<T>(
   endpoint: string,
