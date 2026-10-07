@@ -1,13 +1,22 @@
 """Tool Registry for VERA Investigator."""
 
-from typing import Any
 
+from app.investigator.tools.audio_tool import AudioTranscriptionTool
 from app.investigator.tools.base import InvestigationTool
 from app.investigator.tools.claim_extractor import ClaimExtractorTool
+from app.investigator.tools.deepfake_tool import DeepfakeDetectionTool
 from app.investigator.tools.entity_extractor import EntityExtractorTool
+from app.investigator.tools.face_tool import FaceDetectionTool
 from app.investigator.tools.normalizer import InputNormalizerTool
+from app.investigator.tools.ocr_tool import OCRTool
 from app.investigator.tools.pattern_analyzer import ScamPatternAnalyzerTool
+from app.investigator.tools.video_tool import VideoAnalysisTool
+from app.providers.deepfake import DeepfakeProvider
+from app.providers.face_detector import FaceDetectorProvider
 from app.providers.llm import LLMProvider
+from app.providers.ocr import OCRProvider
+from app.providers.stt import STTProvider
+from app.providers.video_processor import VideoProcessor
 
 
 class ToolRegistry:
@@ -33,11 +42,31 @@ class ToolRegistry:
         return list(self._tools.keys())
 
 
-def create_default_registry(llm_provider: LLMProvider) -> ToolRegistry:
-    """Creates registry initialized with Phase 02 initial tools."""
+def create_default_registry(
+    llm_provider: LLMProvider,
+    ocr_provider: OCRProvider | None = None,
+    stt_provider: STTProvider | None = None,
+    deepfake_provider: DeepfakeProvider | None = None,
+    face_detector: FaceDetectorProvider | None = None,
+    video_processor: VideoProcessor | None = None,
+) -> ToolRegistry:
+    """Creates registry initialized with Phase 02 and Phase 03 multimodal investigative tools."""
     registry = ToolRegistry()
+    # Phase 02 Text & Logic Tools
     registry.register(InputNormalizerTool())
     registry.register(EntityExtractorTool(llm_provider=llm_provider))
     registry.register(ClaimExtractorTool(llm_provider=llm_provider))
     registry.register(ScamPatternAnalyzerTool(llm_provider=llm_provider))
+
+    # Phase 03 Multimodal Forensics Tools
+    registry.register(OCRTool(ocr_provider=ocr_provider))
+    registry.register(AudioTranscriptionTool(stt_provider=stt_provider))
+    registry.register(VideoAnalysisTool(video_processor=video_processor))
+    registry.register(FaceDetectionTool(face_detector=face_detector))
+    registry.register(
+        DeepfakeDetectionTool(
+            deepfake_provider=deepfake_provider,
+            face_detector=face_detector,
+        )
+    )
     return registry

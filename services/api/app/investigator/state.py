@@ -35,6 +35,10 @@ class InvestigationStateDict(TypedDict, total=False):
     raw_input_reference: str | None
     raw_input_text: str
     normalized_input: str
+    image_bytes: bytes | None
+    audio_bytes: bytes | None
+    video_bytes: bytes | None
+    media_bytes: bytes | None
     entities: list[dict[str, Any]]
     claims: list[dict[str, Any]]
     indicators: list[str]

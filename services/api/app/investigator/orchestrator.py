@@ -38,9 +38,14 @@ class VERAInvestigator:
     async def run_investigation(
         self,
         investigation_id: UUID,
-        raw_input_text: str,
+        raw_input_text: str = "",
         input_type: str = "text",
         input_id: UUID | None = None,
+        raw_input_reference: str | None = None,
+        image_bytes: bytes | None = None,
+        audio_bytes: bytes | None = None,
+        video_bytes: bytes | None = None,
+        media_bytes: bytes | None = None,
     ) -> InvestigationState:
         """
         Executes a controlled, deterministic multi-step investigation over LangGraph.
@@ -52,7 +57,8 @@ class VERAInvestigator:
             investigation_id=investigation_id,
             input_id=input_id or uuid4(),
             input_type=input_type,
-            raw_input_text=raw_input_text,
+            raw_input_reference=raw_input_reference,
+            raw_input_text=raw_input_text or "",
             status=AnalysisStatus.PENDING,
             llm_metadata={
                 "provider": self.llm_provider.provider_name,
@@ -67,6 +73,15 @@ class VERAInvestigator:
 
         try:
             graph_input = initial_state.to_graph_state()
+            if image_bytes is not None:
+                graph_input["image_bytes"] = image_bytes
+            if audio_bytes is not None:
+                graph_input["audio_bytes"] = audio_bytes
+            if video_bytes is not None:
+                graph_input["video_bytes"] = video_bytes
+            if media_bytes is not None:
+                graph_input["media_bytes"] = media_bytes
+
             result_state_dict = await self._compiled_graph.ainvoke(graph_input)
             final_state = InvestigationState.from_graph_state(result_state_dict)
         except Exception as exc:

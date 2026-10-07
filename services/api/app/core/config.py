@@ -50,6 +50,11 @@ class Settings(BaseSettings):
     OCR_PROVIDER: str = "unavailable"
     STT_PROVIDER: str = "unavailable"
     DEEPFAKE_PROVIDER: str = "unavailable"
+    FACE_DETECTOR_PROVIDER: str = "opencv"
+    MESONET_WEIGHTS_PATH: str | None = None
+    VIDEO_MAX_FRAMES: int = 10
+    VIDEO_SAMPLE_INTERVAL_SECONDS: float = 1.0
+    MAX_MEDIA_FILE_SIZE_BYTES: int = 52428800  # 50 MB
     URL_CLASSIFIER_PROVIDER: str = "unavailable"
     APK_CLASSIFIER_PROVIDER: str = "unavailable"
     EMBEDDING_PROVIDER: str = "unavailable"
