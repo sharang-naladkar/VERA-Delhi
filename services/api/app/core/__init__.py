@@ -4,7 +4,9 @@ from app.core.config import settings
 from app.core.errors import (
     AppError,
     ConflictError,
+    LLMGenerationError,
     NotFoundError,
+    ProviderUnavailableError,
     ServiceUnavailableError,
     ValidationError,
 )
@@ -19,4 +21,6 @@ __all__ = [
     "ValidationError",
     "ConflictError",
     "ServiceUnavailableError",
+    "ProviderUnavailableError",
+    "LLMGenerationError",
 ]

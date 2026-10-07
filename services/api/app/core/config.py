@@ -40,9 +40,12 @@ class Settings(BaseSettings):
     MINIO_BUCKET: str = "vera-artifacts"
     MINIO_SECURE: bool = False
 
-    # Providers Configuration (Phase 01: Interfaces with unavailable fallbacks)
-    LLM_PROVIDER: str = "unavailable"
-    LLM_MODEL: str = "qwen3:32b"
+    # Providers Configuration (Phase 02: Ollama / Qwen3 and Mock support)
+    LLM_PROVIDER: str = "ollama"
+    LLM_MODEL: str = "qwen3:8b"
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    LLM_TIMEOUT_SECONDS: float = 60.0
+    LLM_TEMPERATURE: float = 0.1
 
     OCR_PROVIDER: str = "unavailable"
     STT_PROVIDER: str = "unavailable"

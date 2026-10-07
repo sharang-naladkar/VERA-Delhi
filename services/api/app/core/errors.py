@@ -92,6 +92,16 @@ class ProviderUnavailableError(AppError):
         )
 
 
+class LLMGenerationError(AppError):
+    def __init__(self, message: str, details: Any | None = None) -> None:
+        super().__init__(
+            message=message,
+            code="LLM_GENERATION_ERROR",
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            details=details,
+        )
+
+
 def build_error_response(
     code: str,
     message: str,

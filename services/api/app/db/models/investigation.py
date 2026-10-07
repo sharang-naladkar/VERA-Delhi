@@ -58,4 +58,8 @@ class InvestigationModel(Base):
             "vera_version": self.vera_version,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
+            "evidence_count": self.context_metadata.get("evidence_count", 0),
+            "evidence": self.context_metadata.get("evidence", []),
+            "result_summary": self.context_metadata.get("result_summary"),
+            "state": self.context_metadata.get("state"),
         }

@@ -1,11 +1,16 @@
 """LLM Provider Interface and Unavailable Fallback."""
 
 from abc import abstractmethod
-from typing import Any
+from typing import Any, TypeVar
 from uuid import UUID
 
+from pydantic import BaseModel
+
 from app.contracts.status import AnalysisStatus
+from app.core.errors import ProviderUnavailableError
 from app.providers.base import BaseProvider
+
+T = TypeVar("T", bound=BaseModel)
 
 
 class LLMProvider(BaseProvider):
@@ -20,6 +25,18 @@ class LLMProvider(BaseProvider):
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Send a chat completion request to the LLM backend."""
+        pass
+
+    @abstractmethod
+    async def generate_structured(
+        self,
+        schema: type[T],
+        prompt: str,
+        system_prompt: str | None = None,
+        temperature: float = 0.1,
+        **kwargs: Any,
+    ) -> T:
+        """Generate structured Pydantic output using the LLM."""
         pass
 
     @abstractmethod
@@ -51,7 +68,7 @@ class UnavailableLLMProvider(LLMProvider):
         return {
             "status": AnalysisStatus.UNAVAILABLE.value,
             "provider": self.provider_name,
-            "message": "LLM provider is not configured in Phase 01 foundation.",
+            "message": "LLM provider is not configured or currently unavailable.",
         }
 
     async def chat(
@@ -68,6 +85,16 @@ class UnavailableLLMProvider(LLMProvider):
             "response": None,
         }
 
+    async def generate_structured(
+        self,
+        schema: type[T],
+        prompt: str,
+        system_prompt: str | None = None,
+        temperature: float = 0.1,
+        **kwargs: Any,
+    ) -> T:
+        raise ProviderUnavailableError(self.provider_name, details={"reason": "LLM provider is not configured or unavailable."})
+
     async def analyze_fraud_claim(
         self,
         investigation_id: UUID,
@@ -78,6 +105,6 @@ class UnavailableLLMProvider(LLMProvider):
             "status": AnalysisStatus.UNAVAILABLE.value,
             "provider": self.provider_name,
             "investigation_id": str(investigation_id),
-            "error": "LLM analysis is not available in Phase 01.",
+            "error": "LLM analysis is not available.",
             "evidence": None,
         }

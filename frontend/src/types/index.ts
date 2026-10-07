@@ -38,11 +38,17 @@ export interface Investigation {
   vera_version: string;
   created_at: string;
   updated_at: string;
+  evidence_count?: number;
+  evidence?: Array<Record<string, unknown>>;
+  result_summary?: string | null;
+  state?: Record<string, unknown> | null;
 }
 
 export interface CreateInvestigationPayload {
   title?: string;
   description?: string;
+  text?: string;
+  input_type?: string;
   metadata?: Record<string, unknown>;
 }
 

@@ -34,6 +34,19 @@
     "metadata": {
       "type": "object"
     },
+    "evidence_count": {
+      "type": "integer"
+    },
+    "evidence": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "result_summary": {
+      "type": ["string", "null"]
+    },
+    "state": {
+      "type": ["object", "null"]
+    },
     "created_at": {
       "type": "string",
       "format": "date-time"

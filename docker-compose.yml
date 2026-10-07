@@ -66,6 +66,13 @@ services:
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-vera_minio_secret}
       MINIO_BUCKET: ${MINIO_BUCKET:-vera-artifacts}
       CORS_ORIGINS: "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://localhost"
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      LLM_MODEL: ${LLM_MODEL:-qwen3:8b}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-60.0}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.1}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8000:8000"
     depends_on:

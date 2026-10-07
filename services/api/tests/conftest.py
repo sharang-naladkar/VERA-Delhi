@@ -6,9 +6,10 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.api.deps import get_db
+from app.api.deps import get_db, get_llm_provider_dep
 from app.db.database import Base
 from app.main import app
+from app.providers.mock_llm import MockLLMProvider
 
 # Use in-memory SQLite database for fast, isolated test execution
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
@@ -49,6 +50,7 @@ async def client(async_db: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
         yield async_db
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_llm_provider_dep] = lambda: MockLLMProvider()
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as test_client:

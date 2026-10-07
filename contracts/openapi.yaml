@@ -186,6 +186,14 @@ components:
           type: string
           nullable: true
           example: "Investigation of fake SEBI registered advisor group"
+        text:
+          type: string
+          nullable: true
+          example: "Guaranteed 200% returns in 30 days. Contact @vip_trading."
+        input_type:
+          type: string
+          default: "text"
+          example: "text"
         metadata:
           type: object
           additionalProperties: true
@@ -221,7 +229,7 @@ components:
             - INSUFFICIENT_EVIDENCE
             - PENDING
             - created
-          example: "created"
+          example: "SUCCESS"
         vera_version:
           type: string
           example: "0.1.0"
@@ -231,6 +239,19 @@ components:
         updated_at:
           type: string
           format: date-time
+        evidence_count:
+          type: integer
+          default: 0
+        evidence:
+          type: array
+          items:
+            type: object
+        result_summary:
+          type: string
+          nullable: true
+        state:
+          type: object
+          nullable: true
 
     ErrorDetail:
       type: object
