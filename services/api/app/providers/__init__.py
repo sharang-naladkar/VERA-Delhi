@@ -8,20 +8,18 @@ from app.providers.deepfake import (
     MockDeepfakeProvider,
     UnavailableDeepfakeProvider,
 )
-from app.providers.embedding import EmbeddingProvider, UnavailableEmbeddingProvider
+from app.providers.embedding import (
+    BGE_M3EmbeddingProvider,
+    EmbeddingProvider,
+    UnavailableEmbeddingProvider,
+)
 from app.providers.face_detector import (
     FaceDetectorProvider,
     MockFaceDetectorProvider,
     OpenCVFaceDetectorProvider,
     UnavailableFaceDetectorProvider,
 )
-from app.providers.factory import (
-    get_deepfake_provider,
-    get_face_detector_provider,
-    get_llm_provider,
-    get_ocr_provider,
-    get_stt_provider,
-)
+
 from app.providers.llm import LLMProvider, UnavailableLLMProvider
 from app.providers.mock_llm import MockLLMProvider
 from app.providers.ocr import (
@@ -31,11 +29,25 @@ from app.providers.ocr import (
     UnavailableOCRProvider,
 )
 from app.providers.ollama import OllamaLLMProvider
+from app.providers.sebi import (
+    MockSEBIProvider,
+    SEBIProvider,
+    UnavailableSEBIProvider,
+)
 from app.providers.stt import (
     FasterWhisperSTTProvider,
     MockSTTProvider,
     STTProvider,
     UnavailableSTTProvider,
+)
+from app.providers.factory import (
+    get_deepfake_provider,
+    get_embedding_provider,
+    get_face_detector_provider,
+    get_llm_provider,
+    get_ocr_provider,
+    get_sebi_provider,
+    get_stt_provider,
 )
 from app.providers.url_classifier import UnavailableURLClassifier, URLClassifier
 from app.providers.video_processor import VideoProcessor
@@ -74,4 +86,10 @@ __all__ = [
     "UnavailableAPKClassifier",
     "EmbeddingProvider",
     "UnavailableEmbeddingProvider",
+    "SEBIProvider",
+    "MockSEBIProvider",
+    "UnavailableSEBIProvider",
+    "get_sebi_provider",
+    "BGE_M3EmbeddingProvider",
+    "get_embedding_provider",
 ]

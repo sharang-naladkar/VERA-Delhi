@@ -1,6 +1,5 @@
 """Tool Registry for VERA Investigator."""
 
-
 from app.investigator.tools.audio_tool import AudioTranscriptionTool
 from app.investigator.tools.base import InvestigationTool
 from app.investigator.tools.claim_extractor import ClaimExtractorTool
@@ -10,11 +9,19 @@ from app.investigator.tools.face_tool import FaceDetectionTool
 from app.investigator.tools.normalizer import InputNormalizerTool
 from app.investigator.tools.ocr_tool import OCRTool
 from app.investigator.tools.pattern_analyzer import ScamPatternAnalyzerTool
+from app.investigator.tools.regulatory_tool import RegulatoryKnowledgeTool
+from app.investigator.tools.sebi_tool import SEBIInvestigationTool
 from app.investigator.tools.video_tool import VideoAnalysisTool
 from app.providers.deepfake import DeepfakeProvider
 from app.providers.face_detector import FaceDetectorProvider
+from app.providers.factory import (
+    get_regulatory_knowledge_provider,
+    get_sebi_provider,
+)
 from app.providers.llm import LLMProvider
 from app.providers.ocr import OCRProvider
+from app.providers.regulatory import RegulatoryKnowledgeProvider
+from app.providers.sebi import SEBIProvider
 from app.providers.stt import STTProvider
 from app.providers.video_processor import VideoProcessor
 
@@ -49,9 +56,18 @@ def create_default_registry(
     deepfake_provider: DeepfakeProvider | None = None,
     face_detector: FaceDetectorProvider | None = None,
     video_processor: VideoProcessor | None = None,
+    sebi_provider: SEBIProvider | None = None,
+    regulatory_provider: RegulatoryKnowledgeProvider | None = None,
 ) -> ToolRegistry:
-    """Creates registry initialized with Phase 02 and Phase 03 multimodal investigative tools."""
+    """Creates registry initialized with investigative tools."""
     registry = ToolRegistry()
+
+    if sebi_provider is None:
+        sebi_provider = get_sebi_provider()
+
+    if regulatory_provider is None:
+        regulatory_provider = get_regulatory_knowledge_provider()
+
     # Phase 02 Text & Logic Tools
     registry.register(InputNormalizerTool())
     registry.register(EntityExtractorTool(llm_provider=llm_provider))
@@ -69,4 +85,15 @@ def create_default_registry(
             face_detector=face_detector,
         )
     )
+
+    # SEBI Regulatory Intelligence
+    registry.register(SEBIInvestigationTool(sebi_provider=sebi_provider))
+
+    # Regulatory Knowledge Retrieval
+    registry.register(
+        RegulatoryKnowledgeTool(
+            regulatory_provider=regulatory_provider,
+        )
+    )
+
     return registry

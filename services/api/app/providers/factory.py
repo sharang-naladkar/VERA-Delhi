@@ -16,6 +16,11 @@ from app.providers.face_detector import (
     OpenCVFaceDetectorProvider,
     UnavailableFaceDetectorProvider,
 )
+from app.providers.regulatory import (
+    MockRegulatoryKnowledgeProvider,
+    RegulatoryKnowledgeProvider,
+    UnavailableRegulatoryKnowledgeProvider,
+)
 from app.providers.llm import LLMProvider, UnavailableLLMProvider
 from app.providers.mock_llm import MockLLMProvider
 from app.providers.ocr import (
@@ -25,13 +30,22 @@ from app.providers.ocr import (
     UnavailableOCRProvider,
 )
 from app.providers.ollama import OllamaLLMProvider
+from app.providers.sebi import (
+    MockSEBIProvider,
+    SEBIProvider,
+    UnavailableSEBIProvider,
+)
 from app.providers.stt import (
     FasterWhisperSTTProvider,
     MockSTTProvider,
     STTProvider,
     UnavailableSTTProvider,
 )
-
+from app.providers.embedding import (
+    BGE_M3EmbeddingProvider,
+    EmbeddingProvider,
+    UnavailableEmbeddingProvider,
+)
 logger = get_logger("app.providers.factory")
 
 
@@ -61,7 +75,10 @@ def get_ocr_provider(settings_override: Any | None = None) -> OCRProvider:
         try:
             return PaddleOCRProvider()
         except Exception as exc:
-            logger.warning(f"Failed to instantiate PaddleOCR provider: {exc}. Falling back to unavailable.")
+            logger.warning(
+                f"Failed to instantiate PaddleOCR provider: {exc}. "
+                "Falling back to unavailable."
+            )
             return UnavailableOCRProvider()
     if provider_name == "mock":
         return MockOCRProvider()
@@ -77,41 +94,112 @@ def get_stt_provider(settings_override: Any | None = None) -> STTProvider:
         try:
             return FasterWhisperSTTProvider()
         except Exception as exc:
-            logger.warning(f"Failed to instantiate faster-whisper provider: {exc}. Falling back to unavailable.")
+            logger.warning(
+                f"Failed to instantiate faster-whisper provider: {exc}. "
+                "Falling back to unavailable."
+            )
             return UnavailableSTTProvider()
     if provider_name == "mock":
         return MockSTTProvider()
     return UnavailableSTTProvider()
 
 
-def get_face_detector_provider(settings_override: Any | None = None) -> FaceDetectorProvider:
+def get_face_detector_provider(
+    settings_override: Any | None = None,
+) -> FaceDetectorProvider:
     """Factory to retrieve configured Face Detection provider based on application settings."""
     cfg = settings_override or settings
-    provider_name = (getattr(cfg, "FACE_DETECTOR_PROVIDER", None) or "opencv").lower().strip()
+    provider_name = (
+        getattr(cfg, "FACE_DETECTOR_PROVIDER", None) or "opencv"
+    ).lower().strip()
 
     if provider_name in ("opencv", "haar"):
         try:
             return OpenCVFaceDetectorProvider()
         except Exception as exc:
-            logger.warning(f"Failed to instantiate OpenCV face detector: {exc}. Falling back to unavailable.")
+            logger.warning(
+                f"Failed to instantiate OpenCV face detector: {exc}. "
+                "Falling back to unavailable."
+            )
             return UnavailableFaceDetectorProvider()
     if provider_name == "mock":
         return MockFaceDetectorProvider()
     return UnavailableFaceDetectorProvider()
 
 
-def get_deepfake_provider(settings_override: Any | None = None) -> DeepfakeProvider:
+def get_deepfake_provider(
+    settings_override: Any | None = None,
+) -> DeepfakeProvider:
     """Factory to retrieve configured Deepfake Detection provider based on application settings."""
     cfg = settings_override or settings
-    provider_name = (getattr(cfg, "DEEPFAKE_PROVIDER", None) or "unavailable").lower().strip()
+    provider_name = (
+        getattr(cfg, "DEEPFAKE_PROVIDER", None) or "unavailable"
+    ).lower().strip()
 
     if provider_name in ("mesonet", "meso4"):
         weights_path = getattr(cfg, "MESONET_WEIGHTS_PATH", None)
         try:
             return MesoNetDeepfakeProvider(weights_path=weights_path)
         except Exception as exc:
-            logger.warning(f"Failed to instantiate MesoNet provider: {exc}. Falling back to unavailable.")
+            logger.warning(
+                f"Failed to instantiate MesoNet provider: {exc}. "
+                "Falling back to unavailable."
+            )
             return UnavailableDeepfakeProvider()
     if provider_name == "mock":
         return MockDeepfakeProvider()
     return UnavailableDeepfakeProvider()
+
+
+def get_sebi_provider(
+    settings_override: Any | None = None,
+) -> SEBIProvider:
+    """Factory to retrieve configured SEBI regulatory intelligence provider."""
+    cfg = settings_override or settings
+    provider_name = (
+        getattr(cfg, "SEBI_PROVIDER", None) or "unavailable"
+    ).lower().strip()
+
+    if provider_name == "mock":
+        return MockSEBIProvider()
+
+    return UnavailableSEBIProvider()
+
+
+def get_regulatory_knowledge_provider(
+    settings_override: Any | None = None,
+) -> RegulatoryKnowledgeProvider:
+    """Factory to retrieve the configured regulatory knowledge provider."""
+    cfg = settings_override or settings
+
+    provider_name = (
+        getattr(cfg, "REGULATORY_KNOWLEDGE_PROVIDER", None)
+        or "unavailable"
+    ).lower().strip()
+
+    if provider_name == "mock":
+        return MockRegulatoryKnowledgeProvider()
+
+    return UnavailableRegulatoryKnowledgeProvider()
+
+
+def get_embedding_provider(
+    settings_override: Any | None = None,
+) -> EmbeddingProvider:
+    """Return the configured embedding provider."""
+    cfg = settings_override or settings
+
+    provider_name = (
+        getattr(cfg, "EMBEDDING_PROVIDER", None) or "unavailable"
+    ).lower().strip()
+
+    if provider_name in ("bge_m3", "bge-m3"):
+        return BGE_M3EmbeddingProvider(
+            model_name=getattr(
+                cfg,
+                "EMBEDDING_MODEL",
+                "BAAI/bge-m3",
+            ),
+        )
+
+    return UnavailableEmbeddingProvider()

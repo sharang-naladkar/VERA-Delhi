@@ -10,6 +10,7 @@ from app.providers.deepfake import UnavailableDeepfakeProvider
 from app.providers.embedding import UnavailableEmbeddingProvider
 from app.providers.llm import UnavailableLLMProvider
 from app.providers.ocr import UnavailableOCRProvider
+from app.providers.sebi import MockSEBIProvider, UnavailableSEBIProvider
 from app.providers.stt import UnavailableSTTProvider
 from app.providers.url_classifier import UnavailableURLClassifier
 
@@ -38,10 +39,14 @@ async def test_unavailable_llm_provider() -> None:
 async def test_unavailable_ocr_provider() -> None:
     provider = UnavailableOCRProvider()
     assert provider.is_available is False
+
     health = await provider.health_check()
     assert health["status"] == AnalysisStatus.UNAVAILABLE.value
 
-    res = await provider.extract_text(investigation_id=uuid.uuid4(), image_bytes=b"fake")
+    res = await provider.extract_text(
+        investigation_id=uuid.uuid4(),
+        image_bytes=b"fake",
+    )
     assert res["status"] == AnalysisStatus.UNAVAILABLE.value
     assert res["text"] == ""
 
@@ -50,10 +55,14 @@ async def test_unavailable_ocr_provider() -> None:
 async def test_unavailable_stt_provider() -> None:
     provider = UnavailableSTTProvider()
     assert provider.is_available is False
+
     health = await provider.health_check()
     assert health["status"] == AnalysisStatus.UNAVAILABLE.value
 
-    res = await provider.transcribe(investigation_id=uuid.uuid4(), audio_bytes=b"fake")
+    res = await provider.transcribe(
+        investigation_id=uuid.uuid4(),
+        audio_bytes=b"fake",
+    )
     assert res["status"] == AnalysisStatus.UNAVAILABLE.value
     assert res["transcript"] == ""
 
@@ -62,11 +71,14 @@ async def test_unavailable_stt_provider() -> None:
 async def test_unavailable_deepfake_provider() -> None:
     provider = UnavailableDeepfakeProvider()
     assert provider.is_available is False
+
     health = await provider.health_check()
     assert health["status"] == AnalysisStatus.UNAVAILABLE.value
 
     res = await provider.analyze_media(
-        investigation_id=uuid.uuid4(), media_bytes=b"fake", media_type="video"
+        investigation_id=uuid.uuid4(),
+        media_bytes=b"fake",
+        media_type="video",
     )
     assert res["status"] == AnalysisStatus.UNAVAILABLE.value
     assert res["manipulation_score"] is None
@@ -76,11 +88,13 @@ async def test_unavailable_deepfake_provider() -> None:
 async def test_unavailable_url_classifier() -> None:
     provider = UnavailableURLClassifier()
     assert provider.is_available is False
+
     health = await provider.health_check()
     assert health["status"] == AnalysisStatus.UNAVAILABLE.value
 
     res = await provider.classify_url(
-        investigation_id=uuid.uuid4(), url="https://fake-sebi-invest.com"
+        investigation_id=uuid.uuid4(),
+        url="https://fake-sebi-invest.com",
     )
     assert res["status"] == AnalysisStatus.UNAVAILABLE.value
     assert res["risk_score"] is None
@@ -90,10 +104,14 @@ async def test_unavailable_url_classifier() -> None:
 async def test_unavailable_apk_classifier() -> None:
     provider = UnavailableAPKClassifier()
     assert provider.is_available is False
+
     health = await provider.health_check()
     assert health["status"] == AnalysisStatus.UNAVAILABLE.value
 
-    res = await provider.analyze_apk(investigation_id=uuid.uuid4(), apk_bytes=b"fake")
+    res = await provider.analyze_apk(
+        investigation_id=uuid.uuid4(),
+        apk_bytes=b"fake",
+    )
     assert res["status"] == AnalysisStatus.UNAVAILABLE.value
     assert res["risk_score"] is None
 
@@ -102,8 +120,54 @@ async def test_unavailable_apk_classifier() -> None:
 async def test_unavailable_embedding_provider() -> None:
     provider = UnavailableEmbeddingProvider()
     assert provider.is_available is False
+
     health = await provider.health_check()
     assert health["status"] == AnalysisStatus.UNAVAILABLE.value
 
     with pytest.raises(NotImplementedError):
         await provider.embed_texts(["sample text"])
+
+
+@pytest.mark.asyncio
+async def test_unavailable_sebi_provider() -> None:
+    provider = UnavailableSEBIProvider()
+
+    assert provider.is_available is False
+
+    health = await provider.health_check()
+    assert health["status"] == AnalysisStatus.UNAVAILABLE.value
+
+    result = await provider.verify_entity(
+        entity_name="Example Advisor",
+        registration_number="TEST-ONLY",
+        entity_type="investment_adviser",
+    )
+
+    assert result.status.value == "UNAVAILABLE"
+    assert result.entity_name == "Example Advisor"
+    assert result.registration_number == "TEST-ONLY"
+    assert result.entity_type == "investment_adviser"
+    assert result.metadata["source_available"] is False
+
+
+@pytest.mark.asyncio
+async def test_mock_sebi_provider() -> None:
+    provider = MockSEBIProvider()
+
+    assert provider.is_available is True
+
+    health = await provider.health_check()
+    assert health["status"] == AnalysisStatus.SUCCESS.value
+
+    result = await provider.verify_entity(
+        entity_name="Example Advisor",
+        registration_number="TEST-ONLY",
+        entity_type="investment_adviser",
+    )
+
+    assert result.status.value == "VERIFIED"
+    assert result.entity_name == "Example Advisor"
+    assert result.registration_number == "TEST-ONLY"
+    assert result.entity_type == "investment_adviser"
+    assert result.metadata["provider"] == "mock_sebi"
+    assert result.metadata["test_fixture"] is True

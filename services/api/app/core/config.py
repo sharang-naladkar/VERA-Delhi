@@ -58,6 +58,8 @@ class Settings(BaseSettings):
     URL_CLASSIFIER_PROVIDER: str = "unavailable"
     APK_CLASSIFIER_PROVIDER: str = "unavailable"
     EMBEDDING_PROVIDER: str = "unavailable"
+    SEBI_PROVIDER: str = "unavailable"
+    REGULATORY_KNOWLEDGE_PROVIDER: str = "unavailable"
 
 
 @lru_cache
