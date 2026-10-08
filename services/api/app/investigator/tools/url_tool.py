@@ -1,100 +1,134 @@
-"""VERA URL intelligence investigation tool."""
+"""Investigator tool for deterministic URL intelligence."""
 
 from __future__ import annotations
 
-from time import perf_counter
 from typing import Any
-from urllib.parse import urlsplit
 
 from app.contracts.evidence import EvidenceContract
 from app.contracts.status import AnalysisStatus, EvidenceType, SeverityLevel
 from app.investigator.tools.base import InvestigationTool, ToolResult
 from app.providers.dns_intelligence import DNSIntelligenceProvider
+from app.providers.http_intelligence import HTTPIntelligenceProvider
+from app.providers.tls_intelligence import TLSIntelligenceProvider
 from app.providers.url_analyzer import URLAnalyzer
 
 
 class URLIntelligenceTool(InvestigationTool):
-    """Analyze URLs using deterministic and DNS intelligence."""
+    """Analyze URL structure and enrich it with DNS, TLS, and HTTP evidence."""
 
     name = "url_intelligence"
     description = (
-        "Performs deterministic URL structure analysis and DNS intelligence."
+        "Performs deterministic URL analysis with DNS, TLS, "
+        "and HTTP intelligence."
     )
-    version = "1.1.0"
+    version = "1.3.0"
 
     def __init__(
         self,
         analyzer: URLAnalyzer | None = None,
         dns_provider: DNSIntelligenceProvider | None = None,
+        tls_provider: TLSIntelligenceProvider | None = None,
+        http_provider: HTTPIntelligenceProvider | None = None,
     ) -> None:
-        self._analyzer = analyzer or URLAnalyzer()
-        self._dns_provider = dns_provider or DNSIntelligenceProvider()
+        self.analyzer = analyzer or URLAnalyzer()
+        self.dns_provider = dns_provider or DNSIntelligenceProvider()
+        self.tls_provider = tls_provider or TLSIntelligenceProvider()
+        self.http_provider = http_provider or HTTPIntelligenceProvider()
 
     async def execute(self, state: dict[str, Any]) -> ToolResult:
-        """Analyze a URL from the current investigation state."""
-
-        started_at = perf_counter()
+        """Execute URL, DNS, TLS, and HTTP intelligence."""
 
         investigation_id = state.get("investigation_id")
         url = state.get("raw_input_text") or state.get("normalized_input")
 
-        if not isinstance(url, str) or not url.strip():
-            return self._failed_result(
-                started_at,
-                "URL input is missing or invalid.",
+        if not investigation_id:
+            return ToolResult(
+                tool_name=self.name,
+                tool_version=self.version,
+                status=AnalysisStatus.FAILED,
+                evidence=[],
+                error_message="Investigation ID is missing.",
             )
 
-        if investigation_id is None:
-            return self._failed_result(
-                started_at,
-                "Investigation ID is missing.",
+        if not url:
+            return ToolResult(
+                tool_name=self.name,
+                tool_version=self.version,
+                status=AnalysisStatus.FAILED,
+                evidence=[],
+                error_message="URL input is missing.",
             )
 
         try:
-            result = self._analyzer.analyze(url)
+            url_result = self.analyzer.analyze(url)
 
-            if not result.is_valid:
-                duration_ms = (perf_counter() - started_at) * 1000
-
+            if not url_result.is_valid:
                 return ToolResult(
                     tool_name=self.name,
                     tool_version=self.version,
                     status=AnalysisStatus.FAILED,
                     evidence=[],
-                    output_data=result.model_dump(),
+                    output_data=url_result.model_dump(),
                     error_message=(
-                        result.warnings[0]
-                        if result.warnings
+                        url_result.warnings[0]
+                        if url_result.warnings
                         else "URL analysis failed."
                     ),
-                    duration_ms=duration_ms,
                 )
 
             evidence: list[EvidenceContract] = []
 
-            deterministic_evidence = self._build_url_evidence(
-                investigation_id=investigation_id,
-                result=result,
+            url_evidence = self._build_url_evidence(
+                investigation_id,
+                url_result,
             )
-            evidence.append(deterministic_evidence)
+            evidence.append(url_evidence)
 
-            dns_result = await self._dns_provider.resolve_domain(
+            dns_result = await self.dns_provider.resolve_domain(
                 investigation_id=investigation_id,
-                hostname=result.hostname,
+                hostname=url_result.hostname,
             )
 
             dns_evidence = self._build_dns_evidence(
-                investigation_id=investigation_id,
-                dns_result=dns_result,
+                investigation_id,
+                dns_result,
             )
             evidence.append(dns_evidence)
 
-            duration_ms = (perf_counter() - started_at) * 1000
+            tls_result: dict[str, Any] | None = None
 
-            output_data = {
-                "url_analysis": result.model_dump(),
+            if url_result.scheme == "https":
+                tls_result = await self.tls_provider.inspect_certificate(
+                    investigation_id=investigation_id,
+                    hostname=url_result.hostname,
+                    port=url_result.port or 443,
+                )
+
+                tls_evidence = self._build_tls_evidence(
+                    investigation_id,
+                    tls_result,
+                )
+                evidence.append(tls_evidence)
+
+            http_result = await self.http_provider.inspect_url(
+                investigation_id=investigation_id,
+                url=url_result.normalized_url,
+            )
+
+            http_evidence = self._build_http_evidence(
+                investigation_id,
+                http_result,
+            )
+            evidence.append(http_evidence)
+
+            output_data: dict[str, Any] = {
+                "url_analysis": url_result.model_dump(),
                 "dns_analysis": dns_result,
+                "http_analysis": http_result,
             }
+
+            if tls_result is not None:
+                output_data["tls_analysis"] = tls_result
 
             return ToolResult(
                 tool_name=self.name,
@@ -102,13 +136,15 @@ class URLIntelligenceTool(InvestigationTool):
                 status=AnalysisStatus.SUCCESS,
                 evidence=evidence,
                 output_data=output_data,
-                duration_ms=duration_ms,
             )
 
         except Exception as exc:
-            return self._failed_result(
-                started_at,
-                f"URL intelligence failed: {exc}",
+            return ToolResult(
+                tool_name=self.name,
+                tool_version=self.version,
+                status=AnalysisStatus.FAILED,
+                evidence=[],
+                error_message=f"URL intelligence failed: {exc}",
             )
 
     def _build_url_evidence(
@@ -118,15 +154,13 @@ class URLIntelligenceTool(InvestigationTool):
     ) -> EvidenceContract:
         """Build deterministic URL evidence."""
 
-        severity = self._derive_severity(result.indicators)
-
         return EvidenceContract(
             investigation_id=investigation_id,
             type=EvidenceType.URL_ANALYSIS,
             category="deterministic_url_analysis",
-            severity=severity,
+            severity=self._derive_severity(result.indicators),
             confidence=1.0,
-            description=self._build_description(result),
+            description=self._build_description(result.indicators),
             source_type="heuristic",
             source_name=self.name,
             source_version=self.version,
@@ -142,95 +176,160 @@ class URLIntelligenceTool(InvestigationTool):
     @staticmethod
     def _build_dns_evidence(
         investigation_id: Any,
-        dns_result: dict[str, Any],
+        result: dict[str, Any],
     ) -> EvidenceContract:
-        """Build evidence from the DNS provider result."""
+        """Build DNS evidence."""
 
-        status_value = dns_result.get(
-            "status",
-            AnalysisStatus.FAILED.value,
+        status = AnalysisStatus(result["status"])
+
+        return EvidenceContract(
+            investigation_id=investigation_id,
+            type=EvidenceType.FORENSIC_ARTIFACT,
+            category="dns_intelligence",
+            severity=(
+                SeverityLevel.INFORMATIONAL
+                if status == AnalysisStatus.SUCCESS
+                else SeverityLevel.INFORMATIONAL
+            ),
+            confidence=1.0 if status == AnalysisStatus.SUCCESS else 0.0,
+            description=(
+                f"DNS resolution returned "
+                f"{result.get('address_count', 0)} address(es)."
+                if status == AnalysisStatus.SUCCESS
+                else "DNS intelligence did not produce a verified resolution."
+            ),
+            source_type="network",
+            source_name="dns_intelligence",
+            source_version="1.0.0",
+            status=status,
+            raw_payload=result,
+            metadata={
+                "hostname": result.get("hostname"),
+                "addresses": result.get("addresses", []),
+            },
         )
 
-        try:
-            status = AnalysisStatus(status_value)
-        except ValueError:
-            status = AnalysisStatus.FAILED
+    @staticmethod
+    def _build_tls_evidence(
+        investigation_id: Any,
+        result: dict[str, Any],
+    ) -> EvidenceContract:
+        """Build TLS evidence."""
+
+        status = AnalysisStatus(result["status"])
+        certificate_valid = result.get("certificate_valid")
 
         if status == AnalysisStatus.SUCCESS:
-            addresses = dns_result.get("addresses", [])
-
-            description = (
-                "DNS resolution succeeded for "
-                f"{dns_result.get('hostname')}: "
-                f"{', '.join(addresses)}."
-            )
-
-            severity = SeverityLevel.INFORMATIONAL
-
-        elif status == AnalysisStatus.UNAVAILABLE:
-            description = (
-                "DNS intelligence was unavailable; no DNS conclusion "
-                "was made."
-            )
-            severity = SeverityLevel.INFORMATIONAL
-
+            if certificate_valid is True:
+                description = (
+                    "TLS certificate was retrieved and the hostname "
+                    "was successfully verified."
+                )
+                severity = SeverityLevel.INFORMATIONAL
+            else:
+                description = (
+                    "TLS certificate was retrieved, but certificate "
+                    "validity could not be confirmed."
+                )
+                severity = SeverityLevel.MEDIUM
         else:
             description = (
-                "DNS resolution failed for "
-                f"{dns_result.get('hostname')}; "
-                "no DNS conclusion was made."
+                "TLS inspection did not produce a verified certificate "
+                "conclusion."
             )
             severity = SeverityLevel.INFORMATIONAL
 
         return EvidenceContract(
             investigation_id=investigation_id,
             type=EvidenceType.FORENSIC_ARTIFACT,
-            category="dns_intelligence",
+            category="tls_intelligence",
             severity=severity,
             confidence=1.0 if status == AnalysisStatus.SUCCESS else 0.0,
             description=description,
             source_type="network",
-            source_name="dns_intelligence",
+            source_name="tls_intelligence",
             source_version="1.0.0",
             status=status,
-            raw_payload=dns_result,
+            raw_payload=result,
             metadata={
-                "hostname": dns_result.get("hostname"),
-                "addresses": dns_result.get("addresses", []),
-                "address_count": dns_result.get("address_count", 0),
+                "hostname": result.get("hostname"),
+                "port": result.get("port"),
+                "tls_version": result.get("tls_version"),
+                "certificate_valid": certificate_valid,
             },
         )
 
     @staticmethod
-    def _failed_result(
-        started_at: float,
-        error_message: str,
-    ) -> ToolResult:
-        """Build a failed tool result."""
+    def _build_http_evidence(
+        investigation_id: Any,
+        result: dict[str, Any],
+    ) -> EvidenceContract:
+        """Build HTTP intelligence evidence."""
 
-        duration_ms = (perf_counter() - started_at) * 1000
+        status = AnalysisStatus(result["status"])
 
-        return ToolResult(
-            tool_name=URLIntelligenceTool.name,
-            tool_version=URLIntelligenceTool.version,
-            status=AnalysisStatus.FAILED,
-            evidence=[],
-            output_data={},
-            error_message=error_message,
-            duration_ms=duration_ms,
+        if status == AnalysisStatus.SUCCESS:
+            indicators = result.get("indicators", [])
+
+            if indicators:
+                description = (
+                    "HTTP intelligence detected the following indicators: "
+                    f"{', '.join(indicators)}."
+                )
+                severity = URLIntelligenceTool._derive_http_severity(
+                    indicators
+                )
+            else:
+                description = (
+                    "HTTP intelligence completed without detecting "
+                    "specific HTTP-layer indicators."
+                )
+                severity = SeverityLevel.INFORMATIONAL
+
+            confidence = 1.0
+        else:
+            description = (
+                "HTTP intelligence did not produce a verified network "
+                "response."
+            )
+            severity = SeverityLevel.INFORMATIONAL
+            confidence = 0.0
+
+        return EvidenceContract(
+            investigation_id=investigation_id,
+            type=EvidenceType.FORENSIC_ARTIFACT,
+            category="http_intelligence",
+            severity=severity,
+            confidence=confidence,
+            description=description,
+            source_type="network",
+            source_name="http_intelligence",
+            source_version="1.0.0",
+            status=status,
+            raw_payload=result,
+            metadata={
+                "status_code": result.get("status_code"),
+                "final_url": result.get("final_url"),
+                "redirect_count": result.get("redirect_count"),
+                "indicators": result.get("indicators", []),
+                "https_to_http_downgrade": result.get(
+                    "https_to_http_downgrade",
+                    False,
+                ),
+            },
         )
 
     @staticmethod
     def _derive_severity(indicators: list[str]) -> SeverityLevel:
-        """Map deterministic URL indicators to an evidence severity."""
+        """Derive severity from deterministic URL indicators."""
 
-        high_risk_indicators = {
+        high_indicators = {
             "embedded_credentials",
             "ip_address_host",
             "punycode_hostname",
         }
 
-        medium_risk_indicators = {
+        medium_indicators = {
             "deep_subdomain_structure",
             "explicit_nonstandard_port",
             "very_long_url",
@@ -238,10 +337,10 @@ class URLIntelligenceTool(InvestigationTool):
             "suspicious_keywords",
         }
 
-        if any(indicator in high_risk_indicators for indicator in indicators):
+        if any(indicator in high_indicators for indicator in indicators):
             return SeverityLevel.HIGH
 
-        if any(indicator in medium_risk_indicators for indicator in indicators):
+        if any(indicator in medium_indicators for indicator in indicators):
             return SeverityLevel.MEDIUM
 
         if "insecure_http" in indicators:
@@ -250,15 +349,31 @@ class URLIntelligenceTool(InvestigationTool):
         return SeverityLevel.INFORMATIONAL
 
     @staticmethod
-    def _build_description(result: Any) -> str:
-        """Build a deterministic human-readable evidence description."""
+    def _derive_http_severity(indicators: list[str]) -> SeverityLevel:
+        """Derive severity from HTTP-layer indicators."""
 
-        if not result.indicators:
+        if "https_to_http_downgrade" in indicators:
+            return SeverityLevel.HIGH
+
+        if "multiple_redirects" in indicators:
+            return SeverityLevel.MEDIUM
+
+        if "client_error_response" in indicators:
+            return SeverityLevel.LOW
+
+        if "server_error_response" in indicators:
+            return SeverityLevel.LOW
+
+        return SeverityLevel.INFORMATIONAL
+
+    @staticmethod
+    def _build_description(indicators: list[str]) -> str:
+        """Build deterministic URL evidence description."""
+
+        if not indicators:
             return "No suspicious URL structure indicators were detected."
-
-        indicators = ", ".join(result.indicators)
 
         return (
             "Deterministic URL analysis detected the following indicators: "
-            f"{indicators}."
+            f"{', '.join(indicators)}."
         )

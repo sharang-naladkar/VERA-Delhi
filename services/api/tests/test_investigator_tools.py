@@ -140,7 +140,7 @@ async def test_url_intelligence_tool_success() -> None:
 
     assert result.status == AnalysisStatus.SUCCESS
     assert result.tool_name == "url_intelligence"
-    assert len(result.evidence) == 2
+    assert len(result.evidence) == 4
 
     evidence = result.evidence[0]
 
@@ -173,7 +173,7 @@ async def test_url_intelligence_tool_includes_dns_evidence() -> None:
     result = await tool.execute(state)
 
     assert result.status == AnalysisStatus.SUCCESS
-    assert len(result.evidence) == 2
+    assert len(result.evidence) == 4
 
     assert result.evidence[0].type == EvidenceType.URL_ANALYSIS
     assert result.evidence[0].category == "deterministic_url_analysis"
@@ -226,7 +226,7 @@ async def test_url_intelligence_dns_failure_preserves_url_evidence(
     result = await tool.execute(state)
 
     assert result.status == AnalysisStatus.SUCCESS
-    assert len(result.evidence) == 2
+    assert len(result.evidence) == 4
 
     assert result.evidence[0].category == "deterministic_url_analysis"
     assert result.evidence[0].status == AnalysisStatus.SUCCESS
@@ -266,7 +266,7 @@ async def test_url_intelligence_tool_missing_url() -> None:
 
     assert result.status == AnalysisStatus.FAILED
     assert result.evidence == []
-    assert result.error_message == "URL input is missing or invalid."
+    assert result.error_message == "URL input is missing."
 
 
 @pytest.mark.asyncio
