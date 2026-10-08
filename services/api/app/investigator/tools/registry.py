@@ -1,5 +1,6 @@
 """Tool Registry for VERA Investigator."""
 
+from app.investigator.tools.apk_tool import APKIntelligenceTool
 from app.investigator.tools.audio_tool import AudioTranscriptionTool
 from app.investigator.tools.base import InvestigationTool
 from app.investigator.tools.claim_extractor import ClaimExtractorTool
@@ -74,5 +75,7 @@ def create_default_registry(
 
     # Phase 04 URL Intelligence
     registry.register(URLIntelligenceTool())
+    # Phase 04 APK Intelligence
+    registry.register(APKIntelligenceTool())
 
     return registry
