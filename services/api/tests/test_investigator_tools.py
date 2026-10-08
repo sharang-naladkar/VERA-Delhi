@@ -1,5 +1,6 @@
 """Tests for VERA Investigation Tools and Registry."""
 
+from typing import Any
 from uuid import uuid4
 
 import pytest
@@ -9,8 +10,9 @@ from app.investigator.tools.claim_extractor import ClaimExtractorTool
 from app.investigator.tools.entity_extractor import EntityExtractorTool
 from app.investigator.tools.normalizer import InputNormalizerTool
 from app.investigator.tools.pattern_analyzer import ScamPatternAnalyzerTool
-from app.investigator.tools.registry import ToolRegistry, create_default_registry
+from app.investigator.tools.registry import create_default_registry
 from app.investigator.tools.url_tool import URLIntelligenceTool
+from app.providers.dns_intelligence import DNSIntelligenceProvider
 from app.providers.mock_llm import MockLLMProvider
 
 
@@ -138,7 +140,7 @@ async def test_url_intelligence_tool_success() -> None:
 
     assert result.status == AnalysisStatus.SUCCESS
     assert result.tool_name == "url_intelligence"
-    assert len(result.evidence) == 1
+    assert len(result.evidence) == 2
 
     evidence = result.evidence[0]
 
@@ -155,6 +157,83 @@ async def test_url_intelligence_tool_success() -> None:
 
     assert "suspicious_keywords" in evidence.metadata["indicators"]
     assert "login" in evidence.metadata["suspicious_keyword_hits"]
+
+
+@pytest.mark.asyncio
+async def test_url_intelligence_tool_includes_dns_evidence() -> None:
+    """Verifies URL intelligence includes deterministic and DNS evidence."""
+    dns_provider = DNSIntelligenceProvider()
+    tool = URLIntelligenceTool(dns_provider=dns_provider)
+
+    state = {
+        "investigation_id": uuid4(),
+        "raw_input_text": "https://example.com/login",
+    }
+
+    result = await tool.execute(state)
+
+    assert result.status == AnalysisStatus.SUCCESS
+    assert len(result.evidence) == 2
+
+    assert result.evidence[0].type == EvidenceType.URL_ANALYSIS
+    assert result.evidence[0].category == "deterministic_url_analysis"
+
+    dns_evidence = result.evidence[1]
+
+    assert dns_evidence.category == "dns_intelligence"
+    assert dns_evidence.source_type == "network"
+    assert dns_evidence.source_name == "dns_intelligence"
+
+    assert result.output_data["url_analysis"]["normalized_url"] == (
+        "https://example.com/login"
+    )
+    assert "dns_analysis" in result.output_data
+
+
+@pytest.mark.asyncio
+async def test_url_intelligence_dns_failure_preserves_url_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """DNS failure must not discard deterministic URL evidence."""
+    dns_provider = DNSIntelligenceProvider()
+
+    async def fake_resolve_domain(
+        investigation_id: object,
+        hostname: str,
+    ) -> dict[str, Any]:
+        return {
+            "status": AnalysisStatus.FAILED.value,
+            "provider": "dns_intelligence",
+            "investigation_id": str(investigation_id),
+            "hostname": hostname,
+            "addresses": [],
+            "error": "DNS resolution failed: simulated failure",
+        }
+
+    monkeypatch.setattr(
+        dns_provider,
+        "resolve_domain",
+        fake_resolve_domain,
+    )
+
+    tool = URLIntelligenceTool(dns_provider=dns_provider)
+
+    state = {
+        "investigation_id": uuid4(),
+        "raw_input_text": "https://example.com/login",
+    }
+
+    result = await tool.execute(state)
+
+    assert result.status == AnalysisStatus.SUCCESS
+    assert len(result.evidence) == 2
+
+    assert result.evidence[0].category == "deterministic_url_analysis"
+    assert result.evidence[0].status == AnalysisStatus.SUCCESS
+
+    assert result.evidence[1].category == "dns_intelligence"
+    assert result.evidence[1].status == AnalysisStatus.FAILED
+    assert result.evidence[1].metadata["addresses"] == []
 
 
 @pytest.mark.asyncio
