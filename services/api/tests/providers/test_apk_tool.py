@@ -10,12 +10,24 @@ from app.contracts.status import AnalysisStatus, EvidenceType, SeverityLevel
 from app.investigator.tools.apk_tool import APKIntelligenceTool
 
 
-def make_apk() -> bytes:
+def make_apk(
+    dex_contents: tuple[bytes, ...] = (b"fake-dex",),
+) -> bytes:
     buffer = io.BytesIO()
 
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr("AndroidManifest.xml", b"fake-manifest")
-        archive.writestr("classes.dex", b"fake-dex")
+        archive.writestr(
+            "AndroidManifest.xml",
+            b"fake-manifest",
+        )
+
+        for index, content in enumerate(dex_contents, start=1):
+            name = (
+                "classes.dex"
+                if index == 1
+                else f"classes{index}.dex"
+            )
+            archive.writestr(name, content)
 
     return buffer.getvalue()
 
@@ -45,6 +57,56 @@ async def test_valid_apk_returns_success() -> None:
     assert evidence.severity == SeverityLevel.LOW
     assert evidence.confidence == 1.0
     assert result.output_data["is_valid"] is True
+    assert "static_analysis" in result.output_data
+
+
+@pytest.mark.asyncio
+async def test_static_urls_are_returned() -> None:
+    tool = APKIntelligenceTool()
+
+    dex = (
+        b"com.example.app\x00"
+        b"https://example.com/login\x00"
+    )
+
+    result = await tool.execute(
+        {
+            "investigation_id": str(uuid.uuid4()),
+            "apk_bytes": make_apk((dex,)),
+        }
+    )
+
+    static = result.output_data["static_analysis"]
+
+    assert result.status == AnalysisStatus.SUCCESS
+    assert "https://example.com/login" in static["urls"]
+    assert static["string_count"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_static_indicators_raise_severity() -> None:
+    tool = APKIntelligenceTool()
+
+    dex = (
+        b"https://example.com/login\x00"
+        b"192.168.1.10\x00"
+        b"Landroid/telephony/SmsManager;\x00"
+        b"Ldalvik/system/DexClassLoader;\x00"
+    )
+
+    result = await tool.execute(
+        {
+            "investigation_id": str(uuid.uuid4()),
+            "apk_bytes": make_apk((dex,)),
+        }
+    )
+
+    static = result.output_data["static_analysis"]
+
+    assert result.status == AnalysisStatus.SUCCESS
+    assert result.evidence[0].severity == SeverityLevel.HIGH
+    assert "sms_api" in static["api_indicators"]
+    assert "dynamic_code_loading" in static["api_indicators"]
 
 
 @pytest.mark.asyncio

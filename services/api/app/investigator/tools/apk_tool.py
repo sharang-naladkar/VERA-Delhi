@@ -1,4 +1,4 @@
-"""APK structural intelligence investigation tool."""
+"""APK structural and static intelligence investigation tool."""
 
 from __future__ import annotations
 
@@ -10,13 +10,19 @@ from app.contracts.evidence import EvidenceContract
 from app.contracts.status import AnalysisStatus, EvidenceType, SeverityLevel
 from app.investigator.tools.base import InvestigationTool, ToolResult
 from app.providers.apk_analyzer import APKAnalyzer
+from app.providers.apk_static_analyzer import APKStaticAnalyzer
 
 
 class APKIntelligenceTool(InvestigationTool):
-    """Perform deterministic, non-executing APK structural analysis."""
+    """Perform deterministic, non-executing APK intelligence analysis."""
 
-    def __init__(self, analyzer: APKAnalyzer | None = None) -> None:
+    def __init__(
+        self,
+        analyzer: APKAnalyzer | None = None,
+        static_analyzer: APKStaticAnalyzer | None = None,
+    ) -> None:
         self.analyzer = analyzer or APKAnalyzer()
+        self.static_analyzer = static_analyzer or APKStaticAnalyzer()
 
     @property
     def name(self) -> str:
@@ -25,13 +31,14 @@ class APKIntelligenceTool(InvestigationTool):
     @property
     def description(self) -> str:
         return (
-            "Performs deterministic APK structural analysis including "
-            "hashing, manifest, DEX, native-library, and archive checks."
+            "Performs deterministic APK structural and static analysis "
+            "including hashing, manifest, DEX, strings, URLs, IP addresses, "
+            "Android API indicators, native libraries, and obfuscation signals."
         )
 
     @property
     def version(self) -> str:
-        return "1.0.0"
+        return "1.1.0"
 
     async def execute(self, state: dict[str, Any]) -> ToolResult:
         start_time = time.perf_counter()
@@ -52,7 +59,7 @@ class APKIntelligenceTool(InvestigationTool):
                 investigation_id=investigation_id,
                 input_id=input_id,
                 type=EvidenceType.APK_ANALYSIS,
-                category="apk_structural_analysis",
+                category="apk_static_analysis",
                 severity=SeverityLevel.INFORMATIONAL,
                 confidence=0.0,
                 description="No APK bytes were provided for analysis.",
@@ -73,45 +80,63 @@ class APKIntelligenceTool(InvestigationTool):
             )
 
         try:
-            result = self.analyzer.analyze(
+            structural_result = self.analyzer.analyze(
                 apk_bytes=apk_bytes,
                 filename=filename,
             )
+
+            static_result = self.static_analyzer.analyze(apk_bytes)
+
             duration_ms = self._duration_ms(start_time)
 
-            is_valid = bool(result.get("is_valid"))
-            suspicious_entries = result.get("suspicious_entries", [])
+            is_valid = bool(structural_result.get("is_valid"))
 
-            if is_valid:
-                severity = (
-                    SeverityLevel.MEDIUM
-                    if suspicious_entries
-                    else SeverityLevel.LOW
-                )
-                status = AnalysisStatus.SUCCESS
-                confidence = 1.0
-                description = (
-                    "APK structural analysis completed successfully. "
-                    f"Detected {result.get('dex_count', 0)} DEX file(s), "
-                    f"{result.get('native_library_count', 0)} native "
-                    "library file(s), and "
-                    f"{len(suspicious_entries)} suspicious archive "
-                    "entry/entries."
-                )
-            else:
-                severity = SeverityLevel.INFORMATIONAL
+            if not is_valid:
                 status = AnalysisStatus.FAILED
+                severity = SeverityLevel.INFORMATIONAL
                 confidence = 1.0
                 description = (
                     "APK structural validation failed. "
-                    + " ".join(result.get("warnings", []))
+                    + " ".join(
+                        structural_result.get("warnings", [])
+                    )
                 )
+            else:
+                indicator_count = self._indicator_count(
+                    static_result
+                )
+
+                if indicator_count >= 4:
+                    severity = SeverityLevel.HIGH
+                elif indicator_count >= 2:
+                    severity = SeverityLevel.MEDIUM
+                else:
+                    severity = SeverityLevel.LOW
+
+                status = AnalysisStatus.SUCCESS
+                confidence = 1.0
+                description = (
+                    "APK structural and static analysis completed. "
+                    f"Found {static_result.get('string_count', 0)} "
+                    f"string(s), {len(static_result.get('urls', []))} "
+                    f"URL(s), {len(static_result.get('ip_addresses', []))} "
+                    f"IP address(es), "
+                    f"{len(static_result.get('api_indicators', []))} "
+                    "API indicator(s), and "
+                    f"{len(static_result.get('obfuscation_indicators', []))} "
+                    "obfuscation indicator(s)."
+                )
+
+            combined_output = {
+                **structural_result,
+                "static_analysis": static_result,
+            }
 
             evidence = EvidenceContract(
                 investigation_id=investigation_id,
                 input_id=input_id,
                 type=EvidenceType.APK_ANALYSIS,
-                category="apk_structural_analysis",
+                category="apk_static_analysis",
                 severity=severity,
                 confidence=confidence,
                 description=description,
@@ -119,21 +144,38 @@ class APKIntelligenceTool(InvestigationTool):
                 source_name=self.name,
                 source_version=self.version,
                 status=status,
-                raw_payload=result,
+                raw_payload=combined_output,
                 metadata={
-                    "sha256": result.get("sha256"),
-                    "size_bytes": result.get("size_bytes"),
-                    "dex_count": result.get("dex_count", 0),
-                    "native_library_count": result.get(
+                    "sha256": structural_result.get("sha256"),
+                    "size_bytes": structural_result.get(
+                        "size_bytes"
+                    ),
+                    "dex_count": structural_result.get(
+                        "dex_count",
+                        0,
+                    ),
+                    "native_library_count": structural_result.get(
                         "native_library_count",
                         0,
                     ),
-                    "suspicious_entry_count": len(
-                        suspicious_entries
+                    "string_count": static_result.get(
+                        "string_count",
+                        0,
                     ),
-                    "has_android_manifest": result.get(
-                        "has_android_manifest",
-                        False,
+                    "url_count": len(
+                        static_result.get("urls", [])
+                    ),
+                    "ip_count": len(
+                        static_result.get("ip_addresses", [])
+                    ),
+                    "api_indicator_count": len(
+                        static_result.get("api_indicators", [])
+                    ),
+                    "obfuscation_indicator_count": len(
+                        static_result.get(
+                            "obfuscation_indicators",
+                            [],
+                        )
                     ),
                 },
             )
@@ -143,7 +185,7 @@ class APKIntelligenceTool(InvestigationTool):
                 tool_version=self.version,
                 status=status,
                 evidence=[evidence],
-                output_data=result,
+                output_data=combined_output,
                 duration_ms=duration_ms,
             )
 
@@ -154,7 +196,7 @@ class APKIntelligenceTool(InvestigationTool):
                 investigation_id=investigation_id,
                 input_id=input_id,
                 type=EvidenceType.APK_ANALYSIS,
-                category="apk_structural_analysis",
+                category="apk_static_analysis",
                 severity=SeverityLevel.INFORMATIONAL,
                 confidence=0.0,
                 description=f"APK analysis failed: {exc}",
@@ -174,6 +216,18 @@ class APKIntelligenceTool(InvestigationTool):
                 error_message=str(exc),
                 duration_ms=duration_ms,
             )
+
+    @staticmethod
+    def _indicator_count(static_result: dict[str, Any]) -> int:
+        return sum(
+            len(static_result.get(key, []))
+            for key in (
+                "urls",
+                "ip_addresses",
+                "api_indicators",
+                "obfuscation_indicators",
+            )
+        )
 
     @staticmethod
     def _get_uuid(value: Any, default: UUID) -> UUID:
@@ -197,4 +251,7 @@ class APKIntelligenceTool(InvestigationTool):
 
     @staticmethod
     def _duration_ms(start_time: float) -> float:
-        return round((time.perf_counter() - start_time) * 1000, 2)
+        return round(
+            (time.perf_counter() - start_time) * 1000,
+            2,
+        )
