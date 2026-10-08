@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field
 
 from app.contracts.evidence import EvidenceContract
+from app.contracts.risk import RiskAssessment
 from app.contracts.status import AnalysisStatus
 from app.investigator.schemas import (
     ClaimExtraction,
@@ -44,6 +45,7 @@ class InvestigationStateDict(TypedDict, total=False):
     indicators: list[str]
     investigation_plan: dict[str, Any] | None
     scam_pattern_analysis: dict[str, Any] | None
+    risk_assessment: dict[str, Any] | None
     evidence: list[dict[str, Any]]
     tool_results: list[dict[str, Any]]
     messages: list[dict[str, str]]
@@ -69,6 +71,7 @@ class InvestigationState(BaseModel):
     indicators: list[str] = Field(default_factory=list)
     investigation_plan: dict[str, Any] | None = None
     scam_pattern_analysis: dict[str, Any] | None = None
+    risk_assessment: dict[str, Any] | None = None
     evidence: list[dict[str, Any]] = Field(default_factory=list)
     tool_results: list[dict[str, Any]] = Field(default_factory=list)
     messages: list[dict[str, str]] = Field(default_factory=list)
@@ -95,6 +98,7 @@ class InvestigationState(BaseModel):
             "indicators": self.indicators,
             "investigation_plan": self.investigation_plan,
             "scam_pattern_analysis": self.scam_pattern_analysis,
+            "risk_assessment": self.risk_assessment,
             "evidence": self.evidence,
             "tool_results": self.tool_results,
             "messages": self.messages,
@@ -127,6 +131,7 @@ class InvestigationState(BaseModel):
             indicators=state_dict.get("indicators", []),
             investigation_plan=state_dict.get("investigation_plan"),
             scam_pattern_analysis=state_dict.get("scam_pattern_analysis"),
+            risk_assessment=state_dict.get("risk_assessment"),
             evidence=state_dict.get("evidence", []),
             tool_results=state_dict.get("tool_results", []),
             messages=state_dict.get("messages", []),

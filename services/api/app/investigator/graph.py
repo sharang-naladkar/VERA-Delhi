@@ -3,9 +3,11 @@
 from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlsplit
+from uuid import UUID
 
 from langgraph.graph import END, START, StateGraph
 
+from app.contracts.evidence import EvidenceContract
 from app.contracts.status import AnalysisStatus
 from app.core.logging import get_logger
 from app.investigator.schemas import InvestigationPlan
@@ -14,6 +16,7 @@ from app.investigator.tools.base import ToolResult
 from app.investigator.tools.registry import ToolRegistry
 from app.prompts.loader import format_prompt
 from app.providers.llm import LLMProvider
+from app.services.risk_engine import calculate_risk
 
 logger = get_logger("app.investigator.graph")
 
@@ -48,6 +51,7 @@ class InvestigatorGraphBuilder:
             self._execute_available_tools_node,
         )
         workflow.add_node("collect_evidence", self._collect_evidence_node)
+        workflow.add_node("calculate_risk", self._calculate_risk_node)
         workflow.add_node(
             "finalize_investigation",
             self._finalize_investigation_node,
@@ -62,7 +66,8 @@ class InvestigatorGraphBuilder:
         workflow.add_edge("analyze_scam_patterns", "plan_investigation")
         workflow.add_edge("plan_investigation", "execute_available_tools")
         workflow.add_edge("execute_available_tools", "collect_evidence")
-        workflow.add_edge("collect_evidence", "finalize_investigation")
+        workflow.add_edge("collect_evidence", "calculate_risk")
+        workflow.add_edge("calculate_risk", "finalize_investigation")
         workflow.add_edge("finalize_investigation", END)
 
         return workflow.compile()
@@ -701,6 +706,64 @@ class InvestigatorGraphBuilder:
         return {
             "current_step": "collect_evidence",
         }
+
+    async def _calculate_risk_node(
+        self,
+        state: InvestigationStateDict,
+    ) -> dict[str, Any]:
+        """Calculate deterministic risk from structured investigation evidence."""
+        logger.info(
+            "Calculating deterministic risk assessment",
+            extra={
+                "extra_fields": {
+                    "investigation_id": state.get("investigation_id"),
+                    "step": "calculate_risk",
+                }
+            },
+        )
+
+        try:
+            investigation_id = UUID(state["investigation_id"])
+
+            evidence = [
+                EvidenceContract.model_validate(item)
+                for item in state.get("evidence", [])
+            ]
+
+            assessment = calculate_risk(
+                investigation_id=investigation_id,
+                claims=state.get("claims", []),
+                indicators=state.get("indicators", []),
+                evidence=evidence,
+                tool_results=state.get("tool_results", []),
+            )
+
+            return {
+                "risk_assessment": assessment.model_dump(mode="json"),
+                "current_step": "calculate_risk",
+            }
+
+        except Exception as exc:
+            logger.error(
+                f"Risk calculation failed: {exc}",
+                exc_info=True,
+                extra={
+                    "extra_fields": {
+                        "investigation_id": state.get("investigation_id"),
+                        "step": "calculate_risk",
+                    }
+                },
+            )
+
+            errors = list(state.get("errors", []))
+            errors.append(f"Risk calculation failure: {exc}")
+
+            return {
+                "risk_assessment": None,
+                "current_step": "calculate_risk",
+                "status": AnalysisStatus.PARTIAL.value,
+                "errors": errors,
+            }
 
     async def _finalize_investigation_node(
         self,
