@@ -41,7 +41,7 @@ export interface Investigation {
   evidence_count?: number;
   evidence?: Array<Record<string, unknown>>;
   result_summary?: string | null;
-  state?: Record<string, unknown> | null;
+  state?: (Record<string, unknown> & { risk_assessment?: RiskAssessment | null }) | null;
 }
 
 export interface CreateInvestigationPayload {
@@ -59,4 +59,22 @@ export interface ApiErrorResponse {
     request_id?: string;
     details?: unknown;
   };
+}
+
+export interface RiskSignal {
+  id: string;
+  category: string;
+  description: string;
+  points: number;
+  source: string;
+  evidence_ids: string[];
+}
+
+export interface RiskAssessment {
+  investigation_id: string;
+  score: number;
+  level: 'low' | 'medium' | 'high' | 'critical';
+  status: AnalysisStatus;
+  signals: RiskSignal[];
+  uncertainties: string[];
 }
