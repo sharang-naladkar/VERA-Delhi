@@ -57,7 +57,7 @@ class ValidationError(AppError):
         super().__init__(
             message=message,
             code="VALIDATION_ERROR",
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             details=details,
         )
 
@@ -155,7 +155,7 @@ def register_error_handlers(app: FastAPI) -> None:
         return build_error_response(
             code="VALIDATION_ERROR",
             message="Invalid request payload or parameters.",
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             details=formatted_errors,
         )
 
@@ -191,3 +191,4 @@ def register_error_handlers(app: FastAPI) -> None:
             message="An unexpected internal error occurred. Please try again later.",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
+
