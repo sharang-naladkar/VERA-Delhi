@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlsplit
 
 from langgraph.graph import END, START, StateGraph
 
@@ -20,7 +21,11 @@ logger = get_logger("app.investigator.graph")
 class InvestigatorGraphBuilder:
     """Builds and compiles the LangGraph StateGraph for VERA investigation workflows."""
 
-    def __init__(self, llm_provider: LLMProvider, tool_registry: ToolRegistry) -> None:
+    def __init__(
+        self,
+        llm_provider: LLMProvider,
+        tool_registry: ToolRegistry,
+    ) -> None:
         self.llm_provider = llm_provider
         self.tool_registry = tool_registry
 
@@ -388,14 +393,22 @@ class InvestigatorGraphBuilder:
         state: InvestigationStateDict,
     ) -> dict[str, Any]:
         """
-        Execute specialized forensic analyzers when media is present.
+        Execute specialized forensic analyzers for the current investigation.
 
-        Video processing is handled in two stages:
-        1. VideoProcessor samples bounded video frames.
-        2. DeepfakeDetector analyzes each sampled frame as an image.
+        Supported specialized paths:
 
-        Raw sampled frame bytes are used only inside this node and are not
-        returned into persistent investigation state.
+        - URL: deterministic URL intelligence.
+        - Image: OCR, face detection, deepfake detection.
+        - Audio: speech-to-text.
+        - Video: bounded frame sampling followed by frame-level deepfake
+          analysis.
+        - Multimodal: OCR, face detection, deepfake detection, transcription.
+
+        URL routing is intentionally independent of ``input_type`` because
+        URLs may currently arrive through the text-input path.
+
+        Raw sampled video frame bytes are used only inside this node and are
+        not returned into persistent investigation state.
         """
 
         logger.info(
@@ -409,21 +422,6 @@ class InvestigatorGraphBuilder:
         )
 
         input_type = str(state.get("input_type", "text")).lower()
-
-        has_media = any(
-            [
-                input_type in ("image", "video", "audio", "multimodal"),
-                state.get("image_bytes"),
-                state.get("audio_bytes"),
-                state.get("video_bytes"),
-                state.get("media_bytes"),
-            ]
-        )
-
-        if not has_media:
-            return {
-                "current_step": "execute_available_tools",
-            }
 
         evidence = list(state.get("evidence", []))
         tool_results = list(state.get("tool_results", []))
@@ -492,12 +490,44 @@ class InvestigatorGraphBuilder:
                 return None
 
         # ---------------------------------------------------------------------
+        # URL
+        # ---------------------------------------------------------------------
+        #
+        # URL input can arrive as:
+        #   1. input_type == "url"
+        #   2. raw_input_text containing a complete HTTP(S) URL
+        #   3. normalized_input containing a complete HTTP(S) URL
+        #
+        # We only route to URL intelligence when the complete input itself is
+        # a URL. A URL embedded inside a longer message remains a text
+        # investigation and will be handled later by entity/claim intelligence.
+        # ---------------------------------------------------------------------
+        if self._is_url_input(state):
+            await execute_tool(
+                "url_intelligence",
+                state,
+                "URLIntelligence",
+            )
+
+        # ---------------------------------------------------------------------
         # IMAGE
         # ---------------------------------------------------------------------
-        if input_type == "image" or state.get("image_bytes"):
-            await execute_tool("ocr_analyzer", state, "OCR")
-            await execute_tool("face_detector", state, "FaceDetector")
-            await execute_tool("deepfake_detector", state, "DeepfakeDetector")
+        elif input_type == "image" or state.get("image_bytes"):
+            await execute_tool(
+                "ocr_analyzer",
+                state,
+                "OCR",
+            )
+            await execute_tool(
+                "face_detector",
+                state,
+                "FaceDetector",
+            )
+            await execute_tool(
+                "deepfake_detector",
+                state,
+                "DeepfakeDetector",
+            )
 
         # ---------------------------------------------------------------------
         # AUDIO
@@ -530,7 +560,7 @@ class InvestigatorGraphBuilder:
 
                     if not frame_bytes:
                         errors.append(
-                            f"DeepfakeDetector: sampled frame "
+                            "DeepfakeDetector: sampled frame "
                             f"{frame_number} has no image bytes"
                         )
                         status = AnalysisStatus.PARTIAL.value
@@ -556,13 +586,36 @@ class InvestigatorGraphBuilder:
         # MULTIMODAL
         # ---------------------------------------------------------------------
         elif input_type == "multimodal" or state.get("media_bytes"):
-            await execute_tool("ocr_analyzer", state, "OCR")
-            await execute_tool("face_detector", state, "FaceDetector")
-            await execute_tool("deepfake_detector", state, "DeepfakeDetector")
+            await execute_tool(
+                "ocr_analyzer",
+                state,
+                "OCR",
+            )
+            await execute_tool(
+                "face_detector",
+                state,
+                "FaceDetector",
+            )
+            await execute_tool(
+                "deepfake_detector",
+                state,
+                "DeepfakeDetector",
+            )
             await execute_tool(
                 "audio_transcriber",
                 state,
                 "AudioTranscriber",
+            )
+
+        else:
+            logger.info(
+                "No specialized URL or media analyzer selected for input",
+                extra={
+                    "extra_fields": {
+                        "investigation_id": state.get("investigation_id"),
+                        "input_type": input_type,
+                    }
+                },
             )
 
         return {
@@ -572,6 +625,57 @@ class InvestigatorGraphBuilder:
             "errors": errors,
             "status": status,
         }
+
+    @staticmethod
+    def _is_url_input(state: InvestigationStateDict) -> bool:
+        """
+        Determine whether the complete investigation input is an HTTP(S) URL.
+
+        This deliberately avoids substring matching. For example:
+
+            "Is this URL safe: https://example.com"
+
+        remains a text investigation rather than being incorrectly routed to
+        URLIntelligenceTool.
+
+        A complete URL is accepted when:
+        - input_type explicitly says "url", or
+        - normalized/raw input is itself an HTTP(S) URL.
+        """
+
+        input_type = str(state.get("input_type", "")).lower()
+
+        if input_type == "url":
+            return True
+
+        candidates = (
+            state.get("normalized_input"),
+            state.get("raw_input_text"),
+        )
+
+        for candidate in candidates:
+            if not isinstance(candidate, str):
+                continue
+
+            value = candidate.strip()
+
+            if not value:
+                continue
+
+            try:
+                parsed = urlsplit(value)
+            except ValueError:
+                continue
+
+            if parsed.scheme.lower() not in {"http", "https"}:
+                continue
+
+            if not parsed.netloc:
+                continue
+
+            return True
+
+        return False
 
     async def _collect_evidence_node(
         self,

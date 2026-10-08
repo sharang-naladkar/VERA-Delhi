@@ -1,6 +1,5 @@
 """Tool Registry for VERA Investigator."""
 
-
 from app.investigator.tools.audio_tool import AudioTranscriptionTool
 from app.investigator.tools.base import InvestigationTool
 from app.investigator.tools.claim_extractor import ClaimExtractorTool
@@ -10,6 +9,7 @@ from app.investigator.tools.face_tool import FaceDetectionTool
 from app.investigator.tools.normalizer import InputNormalizerTool
 from app.investigator.tools.ocr_tool import OCRTool
 from app.investigator.tools.pattern_analyzer import ScamPatternAnalyzerTool
+from app.investigator.tools.url_tool import URLIntelligenceTool
 from app.investigator.tools.video_tool import VideoAnalysisTool
 from app.providers.deepfake import DeepfakeProvider
 from app.providers.face_detector import FaceDetectorProvider
@@ -50,8 +50,10 @@ def create_default_registry(
     face_detector: FaceDetectorProvider | None = None,
     video_processor: VideoProcessor | None = None,
 ) -> ToolRegistry:
-    """Creates registry initialized with Phase 02 and Phase 03 multimodal investigative tools."""
+    """Create the default VERA investigative tool registry."""
+
     registry = ToolRegistry()
+
     # Phase 02 Text & Logic Tools
     registry.register(InputNormalizerTool())
     registry.register(EntityExtractorTool(llm_provider=llm_provider))
@@ -69,4 +71,8 @@ def create_default_registry(
             face_detector=face_detector,
         )
     )
+
+    # Phase 04 URL Intelligence
+    registry.register(URLIntelligenceTool())
+
     return registry
