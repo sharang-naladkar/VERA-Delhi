@@ -16,6 +16,8 @@ from app.investigator.tools.base import ToolResult
 from app.investigator.tools.registry import ToolRegistry
 from app.prompts.loader import format_prompt
 from app.providers.llm import LLMProvider
+from app.services.evidence_correlation import build_evidence_correlation
+from app.services.evidence_graph import build_evidence_graph
 from app.services.risk_engine import calculate_risk
 
 logger = get_logger("app.investigator.graph")
@@ -696,15 +698,184 @@ class InvestigatorGraphBuilder:
             },
         )
 
-        evidence = state.get("evidence", [])
+        evidence_raw = state.get("evidence", [])
 
         logger.info(
-            f"Collected total {len(evidence)} evidence items "
+            f"Collected total {len(evidence_raw)} evidence items "
             f"for investigation {state.get('investigation_id')}"
         )
 
+        errors = list(state.get("errors", []))
+        warnings = list(state.get("warnings", []))
+        status = state.get("status", AnalysisStatus.PENDING.value)
+
+        inv_id_str = state.get("investigation_id")
+        if not inv_id_str:
+            logger.error(
+                "Investigation ID missing in state during collect_evidence",
+                extra={
+                    "extra_fields": {
+                        "step": "collect_evidence",
+                    }
+                },
+            )
+            errors.append("Investigation ID missing in state")
+            return {
+                "current_step": "collect_evidence",
+                "evidence_correlation": None,
+                "evidence_graph": None,
+                "errors": errors,
+                "warnings": warnings,
+                "status": AnalysisStatus.PARTIAL.value,
+            }
+
+        try:
+            investigation_id = UUID(str(inv_id_str))
+        except (ValueError, TypeError) as exc:
+            logger.error(
+                f"Invalid investigation_id in state during collect_evidence: {type(exc).__name__}",
+                extra={
+                    "extra_fields": {
+                        "step": "collect_evidence",
+                        "error_type": type(exc).__name__,
+                    }
+                },
+            )
+            errors.append("Invalid investigation_id in state")
+            return {
+                "current_step": "collect_evidence",
+                "evidence_correlation": None,
+                "evidence_graph": None,
+                "errors": errors,
+                "warnings": warnings,
+                "status": AnalysisStatus.PARTIAL.value,
+            }
+
+        input_id_str = state.get("input_id")
+        input_id: UUID | None = None
+        if input_id_str:
+            try:
+                input_id = UUID(str(input_id_str))
+            except (ValueError, TypeError):
+                input_id = None
+
+        validated_evidence: list[EvidenceContract] = []
+        malformed_evidence_count = 0
+        for idx, item in enumerate(evidence_raw):
+            try:
+                if isinstance(item, EvidenceContract):
+                    validated_evidence.append(item)
+                else:
+                    validated_evidence.append(EvidenceContract.model_validate(item))
+            except Exception as val_exc:
+                malformed_evidence_count += 1
+                logger.warning(
+                    f"Skipping malformed evidence item at index {idx} in investigation {investigation_id}: {type(val_exc).__name__}",
+                    extra={
+                        "extra_fields": {
+                            "investigation_id": str(investigation_id),
+                            "evidence_index": idx,
+                            "error_type": type(val_exc).__name__,
+                        }
+                    },
+                )
+
+        if malformed_evidence_count > 0:
+            warnings.append(
+                f"Skipped {malformed_evidence_count} malformed evidence item(s) during correlation/graph construction."
+            )
+
+        validated_tool_results: list[ToolResult] = []
+        malformed_tool_results_count = 0
+        for idx, tr in enumerate(state.get("tool_results", [])):
+            try:
+                if isinstance(tr, ToolResult):
+                    validated_tool_results.append(tr)
+                else:
+                    validated_tool_results.append(ToolResult.model_validate(tr))
+            except Exception as val_exc:
+                malformed_tool_results_count += 1
+                logger.warning(
+                    f"Skipping malformed tool result item at index {idx} in investigation {investigation_id}: {type(val_exc).__name__}",
+                    extra={
+                        "extra_fields": {
+                            "investigation_id": str(investigation_id),
+                            "tool_result_index": idx,
+                            "error_type": type(val_exc).__name__,
+                        }
+                    },
+                )
+
+        if malformed_tool_results_count > 0:
+            warnings.append(
+                f"Skipped {malformed_tool_results_count} malformed tool result item(s) during correlation construction."
+            )
+
+        # 1. Build Correlation independently
+        correlation_data = None
+        try:
+            correlation = build_evidence_correlation(
+                investigation_id=investigation_id,
+                input_id=input_id,
+                input_reference=state.get("raw_input_reference"),
+                entities=state.get("entities", []),
+                claims=state.get("claims", []),
+                indicators=state.get("indicators", []),
+                tool_results=validated_tool_results,
+                evidence=validated_evidence,
+            )
+            correlation_data = correlation.model_dump(mode="json")
+        except Exception as exc:
+            logger.error(
+                f"Evidence correlation failed: {type(exc).__name__}",
+                exc_info=True,
+                extra={
+                    "extra_fields": {
+                        "investigation_id": str(investigation_id),
+                        "step": "collect_evidence",
+                        "error_type": type(exc).__name__,
+                    }
+                },
+            )
+            errors.append(f"Evidence correlation failure: {exc}")
+            status = AnalysisStatus.PARTIAL.value
+
+        # 2. Build Graph independently
+        graph_data = None
+        try:
+            graph = build_evidence_graph(
+                investigation_id=investigation_id,
+                input_id=input_id,
+                raw_input_reference=state.get("raw_input_reference"),
+                raw_input_text=state.get("raw_input_text", ""),
+                entities=state.get("entities", []),
+                claims=state.get("claims", []),
+                indicators=state.get("indicators", []),
+                evidence=validated_evidence,
+            )
+            graph_data = graph.model_dump(mode="json")
+        except Exception as exc:
+            logger.error(
+                f"Evidence graph construction failed: {type(exc).__name__}",
+                exc_info=True,
+                extra={
+                    "extra_fields": {
+                        "investigation_id": str(investigation_id),
+                        "step": "collect_evidence",
+                        "error_type": type(exc).__name__,
+                    }
+                },
+            )
+            errors.append(f"Evidence graph construction failure: {exc}")
+            status = AnalysisStatus.PARTIAL.value
+
         return {
             "current_step": "collect_evidence",
+            "evidence_correlation": correlation_data,
+            "evidence_graph": graph_data,
+            "errors": errors,
+            "warnings": warnings,
+            "status": status,
         }
 
     async def _calculate_risk_node(
@@ -722,9 +893,47 @@ class InvestigatorGraphBuilder:
             },
         )
 
-        try:
-            investigation_id = UUID(state["investigation_id"])
+        inv_id_str = state.get("investigation_id")
+        if not inv_id_str:
+            logger.error(
+                "Investigation ID missing in state during calculate_risk",
+                extra={
+                    "extra_fields": {
+                        "step": "calculate_risk",
+                    }
+                },
+            )
+            errors = list(state.get("errors", []))
+            errors.append("Investigation ID missing in state")
+            return {
+                "risk_assessment": None,
+                "current_step": "calculate_risk",
+                "status": AnalysisStatus.PARTIAL.value,
+                "errors": errors,
+            }
 
+        try:
+            investigation_id = UUID(str(inv_id_str))
+        except (ValueError, TypeError) as exc:
+            logger.error(
+                f"Invalid investigation_id in state during calculate_risk: {type(exc).__name__}",
+                extra={
+                    "extra_fields": {
+                        "step": "calculate_risk",
+                        "error_type": type(exc).__name__,
+                    }
+                },
+            )
+            errors = list(state.get("errors", []))
+            errors.append("Invalid investigation_id in state")
+            return {
+                "risk_assessment": None,
+                "current_step": "calculate_risk",
+                "status": AnalysisStatus.PARTIAL.value,
+                "errors": errors,
+            }
+
+        try:
             evidence = [
                 EvidenceContract.model_validate(item)
                 for item in state.get("evidence", [])
@@ -745,12 +954,13 @@ class InvestigatorGraphBuilder:
 
         except Exception as exc:
             logger.error(
-                f"Risk calculation failed: {exc}",
+                f"Risk calculation failed: {type(exc).__name__}",
                 exc_info=True,
                 extra={
                     "extra_fields": {
-                        "investigation_id": state.get("investigation_id"),
+                        "investigation_id": str(investigation_id),
                         "step": "calculate_risk",
+                        "error_type": type(exc).__name__,
                     }
                 },
             )

@@ -81,6 +81,19 @@ def calculate_risk(
             continue
 
         scored_categories.add(category)
+        matching_evidence_ids = [
+            item.id
+            for item in evidence
+            if item.status == AnalysisStatus.SUCCESS
+            and _normalise(item.category)
+            in {
+                f"claim:{category}",
+                f"claim_{category}",
+                category,
+                "claim_extraction",
+            }
+        ]
+
         signals.append(
             RiskSignal(
                 id=_signal_id(investigation_id, category),
@@ -88,11 +101,7 @@ def calculate_risk(
                 description=f"Claim category '{category}' was observed.",
                 points=points,
                 source="claim_extraction",
-                evidence_ids=[
-                    item.id
-                    for item in evidence
-                    if item.category == "claim_extraction"
-                ],
+                evidence_ids=matching_evidence_ids,
             )
         )
         score += points

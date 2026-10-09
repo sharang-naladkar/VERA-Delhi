@@ -34,6 +34,10 @@ async def test_api_investigation_with_text_executes_graph(client: AsyncClient) -
     assert data["result_summary"] is not None
     assert "state" in data
     assert data["state"]["normalized_input"] != ""
+    assert "evidence_correlation" in data["state"]
+    assert "evidence_graph" in data["state"]
+    assert data["state"]["evidence_graph"]["nodes"] is not None
+    assert data["state"]["evidence_correlation"]["entities"] is not None
 
     # Verify GET /v1/investigations/{id} retrieves the persisted state and evidence
     get_resp = await client.get(f"/v1/investigations/{data['id']}")
@@ -43,6 +47,19 @@ async def test_api_investigation_with_text_executes_graph(client: AsyncClient) -
     assert get_data["status"] == data["status"]
     assert get_data["evidence_count"] == data["evidence_count"]
     assert len(get_data["evidence"]) == len(data["evidence"])
+    assert "evidence_correlation" in get_data["state"]
+    assert "evidence_graph" in get_data["state"]
+
+    # Verify persistent graph and correlation payload details from GET
+    graph_get = get_data["state"]["evidence_graph"]
+    assert graph_get["investigation_id"] == data["id"]
+    assert len(graph_get["nodes"]) >= 2
+    assert len(graph_get["edges"]) >= 1
+
+    correlation_get = get_data["state"]["evidence_correlation"]
+    assert correlation_get["investigation_id"] == data["id"]
+    assert len(correlation_get["entities"]) >= 1
+    assert len(correlation_get["claims"]) >= 1
 
 
 @pytest.mark.asyncio

@@ -46,6 +46,8 @@ class InvestigationStateDict(TypedDict, total=False):
     investigation_plan: dict[str, Any] | None
     scam_pattern_analysis: dict[str, Any] | None
     risk_assessment: dict[str, Any] | None
+    evidence_correlation: dict[str, Any] | None
+    evidence_graph: dict[str, Any] | None
     evidence: list[dict[str, Any]]
     tool_results: list[dict[str, Any]]
     messages: list[dict[str, str]]
@@ -72,6 +74,8 @@ class InvestigationState(BaseModel):
     investigation_plan: dict[str, Any] | None = None
     scam_pattern_analysis: dict[str, Any] | None = None
     risk_assessment: dict[str, Any] | None = None
+    evidence_correlation: dict[str, Any] | None = None
+    evidence_graph: dict[str, Any] | None = None
     evidence: list[dict[str, Any]] = Field(default_factory=list)
     tool_results: list[dict[str, Any]] = Field(default_factory=list)
     messages: list[dict[str, str]] = Field(default_factory=list)
@@ -99,6 +103,8 @@ class InvestigationState(BaseModel):
             "investigation_plan": self.investigation_plan,
             "scam_pattern_analysis": self.scam_pattern_analysis,
             "risk_assessment": self.risk_assessment,
+            "evidence_correlation": self.evidence_correlation,
+            "evidence_graph": self.evidence_graph,
             "evidence": self.evidence,
             "tool_results": self.tool_results,
             "messages": self.messages,
@@ -132,6 +138,8 @@ class InvestigationState(BaseModel):
             investigation_plan=state_dict.get("investigation_plan"),
             scam_pattern_analysis=state_dict.get("scam_pattern_analysis"),
             risk_assessment=state_dict.get("risk_assessment"),
+            evidence_correlation=state_dict.get("evidence_correlation"),
+            evidence_graph=state_dict.get("evidence_graph"),
             evidence=state_dict.get("evidence", []),
             tool_results=state_dict.get("tool_results", []),
             messages=state_dict.get("messages", []),
