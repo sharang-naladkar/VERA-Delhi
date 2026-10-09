@@ -118,3 +118,34 @@ async def test_investigator_malformed_llm_output_fail_safe() -> None:
     assert state.current_step == "completed"
     assert state.status in (AnalysisStatus.PARTIAL, AnalysisStatus.FAILED)
     assert len(state.errors) >= 1
+
+@pytest.mark.asyncio
+async def test_regulatory_verification_unavailable_is_preserved() -> None:
+    """Explicit regulatory checks remain unavailable, not fraud verdicts."""
+    investigator = VERAInvestigator(llm_provider=MockLLMProvider(mode="clean"))
+
+    state = await investigator.run_investigation(
+        investigation_id=uuid4(),
+        raw_input_text="Please check this investment adviser.",
+        input_type="text",
+        regulatory_verification_request={
+            "participant_type": "investment_adviser",
+            "subject_name": "Example Adviser",
+        },
+    )
+
+    regulatory_results = [
+        result
+        for result in state.tool_results
+        if result.get("tool_name") == "regulatory_verification"
+    ]
+
+    assert len(regulatory_results) == 1
+    result = regulatory_results[0]
+    assert result["status"] == AnalysisStatus.UNAVAILABLE.value
+    assert result["output_data"]["matched"] is None
+    assert result["output_data"]["verification_status"] == (
+        AnalysisStatus.UNAVAILABLE.value
+    )
+    assert state.status == AnalysisStatus.PARTIAL
+    assert state.current_step == "completed"

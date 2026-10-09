@@ -1,4 +1,4 @@
-"""Tool Registry for VERA Investigator."""
+﻿"""Tool Registry for VERA Investigator."""
 
 from app.investigator.tools.apk_tool import APKIntelligenceTool
 from app.investigator.tools.audio_tool import AudioTranscriptionTool
@@ -10,36 +10,36 @@ from app.investigator.tools.face_tool import FaceDetectionTool
 from app.investigator.tools.normalizer import InputNormalizerTool
 from app.investigator.tools.ocr_tool import OCRTool
 from app.investigator.tools.pattern_analyzer import ScamPatternAnalyzerTool
+from app.investigator.tools.regulatory_tool import RegulatoryVerificationTool
 from app.investigator.tools.url_tool import URLIntelligenceTool
 from app.investigator.tools.video_tool import VideoAnalysisTool
 from app.providers.deepfake import DeepfakeProvider
 from app.providers.face_detector import FaceDetectorProvider
 from app.providers.llm import LLMProvider
 from app.providers.ocr import OCRProvider
+from app.providers.regulatory_verification_service import (
+    RegulatoryVerificationService,
+)
 from app.providers.stt import STTProvider
 from app.providers.video_processor import VideoProcessor
 
 
 class ToolRegistry:
-    """Registry maintaining available investigative tools for the VERA investigator."""
+    """Registry maintaining available investigative tools."""
 
     def __init__(self) -> None:
         self._tools: dict[str, InvestigationTool] = {}
 
     def register(self, tool: InvestigationTool) -> None:
-        """Registers a tool instance."""
         self._tools[tool.name] = tool
 
     def get(self, name: str) -> InvestigationTool | None:
-        """Retrieves a tool by its unique name."""
         return self._tools.get(name)
 
     def list_tools(self) -> list[InvestigationTool]:
-        """Returns all registered tool instances."""
         return list(self._tools.values())
 
     def list_names(self) -> list[str]:
-        """Returns registered tool names."""
         return list(self._tools.keys())
 
 
@@ -50,6 +50,7 @@ def create_default_registry(
     deepfake_provider: DeepfakeProvider | None = None,
     face_detector: FaceDetectorProvider | None = None,
     video_processor: VideoProcessor | None = None,
+    regulatory_service: RegulatoryVerificationService | None = None,
 ) -> ToolRegistry:
     """Create the default VERA investigative tool registry."""
 
@@ -73,9 +74,13 @@ def create_default_registry(
         )
     )
 
-    # Phase 04 URL Intelligence
+    # Phase 04 URL and APK Intelligence
     registry.register(URLIntelligenceTool())
-    # Phase 04 APK Intelligence
     registry.register(APKIntelligenceTool())
+
+    # Phase 05 Regulatory Intelligence
+    registry.register(
+        RegulatoryVerificationTool(service=regulatory_service)
+    )
 
     return registry

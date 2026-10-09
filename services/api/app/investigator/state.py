@@ -32,6 +32,7 @@ class InvestigationStateDict(TypedDict, total=False):
     investigation_id: str
     input_id: str | None
     input_type: str
+    regulatory_verification_request: dict[str, Any] | None
     raw_input_reference: str | None
     raw_input_text: str
     normalized_input: str
@@ -61,6 +62,7 @@ class InvestigationState(BaseModel):
     investigation_id: UUID = Field(default_factory=uuid4)
     input_id: UUID | None = None
     input_type: str = "text"
+    regulatory_verification_request: dict[str, Any] | None = None
     raw_input_reference: str | None = None
     raw_input_text: str = ""
     normalized_input: str = ""
@@ -87,6 +89,7 @@ class InvestigationState(BaseModel):
             "investigation_id": str(self.investigation_id),
             "input_id": str(self.input_id) if self.input_id else None,
             "input_type": self.input_type,
+            "regulatory_verification_request": self.regulatory_verification_request,
             "raw_input_reference": self.raw_input_reference,
             "raw_input_text": self.raw_input_text,
             "normalized_input": self.normalized_input,
@@ -119,6 +122,9 @@ class InvestigationState(BaseModel):
             investigation_id=UUID(state_dict["investigation_id"]),
             input_id=UUID(state_dict["input_id"]) if state_dict.get("input_id") else None,
             input_type=state_dict.get("input_type", "text"),
+            regulatory_verification_request=state_dict.get(
+                "regulatory_verification_request"
+            ),
             raw_input_reference=state_dict.get("raw_input_reference"),
             raw_input_text=state_dict.get("raw_input_text", ""),
             normalized_input=state_dict.get("normalized_input", ""),

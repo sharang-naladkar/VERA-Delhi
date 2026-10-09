@@ -46,6 +46,7 @@ class VERAInvestigator:
         audio_bytes: bytes | None = None,
         video_bytes: bytes | None = None,
         media_bytes: bytes | None = None,
+        regulatory_verification_request: dict[str, object] | None = None,
     ) -> InvestigationState:
         """
         Executes a controlled, deterministic multi-step investigation over LangGraph.
@@ -57,6 +58,7 @@ class VERAInvestigator:
             investigation_id=investigation_id,
             input_id=input_id or uuid4(),
             input_type=input_type,
+            regulatory_verification_request=regulatory_verification_request,
             raw_input_reference=raw_input_reference,
             raw_input_text=raw_input_text or "",
             status=AnalysisStatus.PENDING,

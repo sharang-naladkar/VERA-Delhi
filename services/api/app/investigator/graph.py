@@ -618,6 +618,13 @@ class InvestigatorGraphBuilder:
                 },
             )
 
+        if state.get("regulatory_verification_request") is not None:
+            await execute_tool(
+                "regulatory_verification",
+                state,
+                "RegulatoryVerification",
+            )
+
         return {
             "current_step": "execute_available_tools",
             "evidence": evidence,
