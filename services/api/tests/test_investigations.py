@@ -78,3 +78,73 @@ async def test_get_investigation_invalid_uuid(client: AsyncClient) -> None:
     assert "error" in data
     assert data["error"]["code"] == "VALIDATION_ERROR"
     assert data["error"]["request_id"] is not None
+
+@pytest.mark.asyncio
+async def test_regulatory_only_investigation_preserves_unavailable_result(
+    client: AsyncClient,
+) -> None:
+    """A structured request runs without text and never invents a match."""
+    response = await client.post(
+        "/v1/investigations",
+        json={
+            "title": "Regulatory verification test",
+            "regulatory_verification_request": {
+                "participant_type": "investment_adviser",
+                "subject_name": "Example Adviser",
+            },
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    state = data["state"]
+    assert state is not None
+
+    results = [
+        item
+        for item in state["tool_results"]
+        if item.get("tool_name") == "regulatory_verification"
+    ]
+
+    assert len(results) == 1
+    assert results[0]["status"] == "UNAVAILABLE"
+    assert results[0]["output_data"]["matched"] is None
+    assert (
+        results[0]["output_data"]["verification_status"]
+        == "UNAVAILABLE"
+    )
+
+
+@pytest.mark.asyncio
+async def test_regulatory_request_without_identifier_is_rejected(
+    client: AsyncClient,
+) -> None:
+    """Invalid regulatory requests fail API validation before investigation."""
+    response = await client.post(
+        "/v1/investigations",
+        json={
+            "regulatory_verification_request": {
+                "participant_type": "investment_adviser",
+            },
+        },
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_regulatory_request_with_unknown_participant_type_is_rejected(
+    client: AsyncClient,
+) -> None:
+    """Unknown participant types are rejected by the typed API contract."""
+    response = await client.post(
+        "/v1/investigations",
+        json={
+            "regulatory_verification_request": {
+                "participant_type": "unknown_participant",
+                "subject_name": "Example Adviser",
+            },
+        },
+    )
+
+    assert response.status_code == 422

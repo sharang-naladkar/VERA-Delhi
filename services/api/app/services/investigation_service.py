@@ -48,7 +48,13 @@ class InvestigationService:
         text_to_investigate = payload.text if (payload and payload.text is not None) else None
 
         # If no text provided, create initial 'created' placeholder (Phase 01 compat)
-        if text_to_investigate is None:
+        if (
+            text_to_investigate is None
+            and not (
+                payload
+                and payload.regulatory_verification_request is not None
+            )
+        ):
             investigation = InvestigationModel(
                 id=investigation_id,
                 title=title,
@@ -66,8 +72,13 @@ class InvestigationService:
         # Execute Central VERA Investigator over LangGraph
         final_state = await self.investigator.run_investigation(
             investigation_id=investigation_id,
-            raw_input_text=text_to_investigate,
+            raw_input_text=text_to_investigate or "",
             input_type=input_type,
+            regulatory_verification_request=(
+                payload.regulatory_verification_request.model_dump(mode="json")
+                if payload and payload.regulatory_verification_request
+                else None
+            ),
         )
 
         # Prepare summary from messages

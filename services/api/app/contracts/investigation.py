@@ -6,6 +6,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.contracts.regulatory import RegulatoryVerificationRequest
+
 
 class CreateInvestigationRequest(BaseModel):
     """Payload to initiate a new investigation."""
@@ -15,6 +17,10 @@ class CreateInvestigationRequest(BaseModel):
     text: str | None = Field(None, description="Suspicious text, message, or claim to investigate")
     input_type: str = Field(default="text", description="Input modality (e.g. text, message, claim, profile_description)")
     metadata: dict[str, Any] = Field(default_factory=dict, description="Initial context metadata")
+    regulatory_verification_request: RegulatoryVerificationRequest | None = Field(
+        default=None,
+        description="Optional explicit request to check a securities-market participant against registered regulatory sources.",
+    )
 
 
 class InvestigationResponse(BaseModel):
