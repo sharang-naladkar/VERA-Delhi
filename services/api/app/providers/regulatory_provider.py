@@ -1,8 +1,11 @@
-﻿"""Regulatory verification provider with explicit source availability."""
+﻿"""Regulatory verification provider with explicit source selection."""
 
 from typing import Any
 
 from app.contracts.regulatory import (
+    RegulatoryCapability,
+    RegulatoryParticipantType,
+    RegulatorySource,
     RegulatoryVerificationRequest,
     RegulatoryVerificationResult,
 )
@@ -12,11 +15,7 @@ from app.providers.regulatory_verification import RegulatoryVerificationProvider
 
 
 class RegistryRegulatoryProvider(RegulatoryVerificationProvider):
-    """Provider that reports configured source availability.
-
-    This implementation does not retrieve regulatory records. It only
-    reports whether registered sources are configured for automated access.
-    """
+    """Resolve applicable regulatory sources without claiming live verification."""
 
     def __init__(
         self,
@@ -30,19 +29,19 @@ class RegistryRegulatoryProvider(RegulatoryVerificationProvider):
 
     @property
     def is_available(self) -> bool:
-        """The registry provider is available when it has enabled sources."""
+        """The provider is available when at least one source is enabled."""
         return bool(self.supported_source_ids)
 
     @property
     def supported_source_ids(self) -> tuple[str, ...]:
-        """Return enabled sources declared in the source registry."""
+        """Return enabled source IDs."""
         return tuple(
             source.source_id
             for source in self._registry.list_sources(enabled_only=True)
         )
 
     async def health_check(self) -> dict[str, Any]:
-        """Report registry health without contacting external sources."""
+        """Report local registry health without making network requests."""
         sources = self._registry.list_sources(enabled_only=True)
         automated_sources = [
             source.source_id
@@ -57,6 +56,7 @@ class RegistryRegulatoryProvider(RegulatoryVerificationProvider):
                 "message": "No enabled regulatory sources are configured.",
                 "enabled_source_count": 0,
                 "automated_source_ids": [],
+                "live_source_access_checked": False,
             }
 
         return {
@@ -64,24 +64,56 @@ class RegistryRegulatoryProvider(RegulatoryVerificationProvider):
             "provider": self.provider_name,
             "message": (
                 "Regulatory source registry is available. "
-                "This check does not confirm live source accessibility."
+                "Live source accessibility has not been checked."
             ),
             "enabled_source_count": len(sources),
             "automated_source_ids": automated_sources,
             "live_source_access_checked": False,
         }
 
+    def select_sources(
+        self,
+        participant_type: RegulatoryParticipantType,
+        capability: RegulatoryCapability,
+    ) -> list[RegulatorySource]:
+        """Return enabled sources matching participant type and capability."""
+        return self._registry.sources_for(
+            participant_type,
+            capability=capability,
+            enabled_only=True,
+        )
+
+    @staticmethod
+    def _required_capability(
+        request: RegulatoryVerificationRequest,
+    ) -> RegulatoryCapability:
+        """Choose the minimum registry capability for the supplied request."""
+        if request.participant_type == RegulatoryParticipantType.STOCKBROKER:
+            return RegulatoryCapability.BROKER_MEMBERSHIP_LOOKUP
+
+        if (
+            request.participant_type
+            == RegulatoryParticipantType.AUTHORISED_PERSON
+        ):
+            return RegulatoryCapability.AUTHORISED_PERSON_LOOKUP
+
+        if request.registration_number:
+            return RegulatoryCapability.REGISTRATION_LOOKUP
+
+        return RegulatoryCapability.IDENTITY_MATCH
+
     async def verify(
         self,
         request: RegulatoryVerificationRequest,
     ) -> RegulatoryVerificationResult:
-        """Fail safely until a live source adapter is implemented."""
-        candidate_sources = self._registry.sources_for(
+        """Resolve a source but do not claim verification without retrieval."""
+        capability = self._required_capability(request)
+        candidates = self.select_sources(
             request.participant_type,
-            enabled_only=True,
+            capability,
         )
 
-        if not candidate_sources:
+        if not candidates:
             return RegulatoryVerificationResult(
                 participant_type=request.participant_type,
                 status=AnalysisStatus.UNAVAILABLE,
@@ -89,24 +121,19 @@ class RegistryRegulatoryProvider(RegulatoryVerificationProvider):
                 registration_number=request.registration_number,
                 matched=None,
                 explanation=(
-                    "No enabled regulatory source is configured for this "
-                    "participant type. No registration verification occurred."
+                    "No enabled source advertises the required capability "
+                    "for this participant type. No verification occurred."
                 ),
                 limitations=[
-                    "No authoritative source was queried.",
-                    "This result does not establish that the participant "
-                    "is registered or unregistered.",
+                    f"Required capability: {capability.value}.",
+                    "No authoritative record was retrieved or matched.",
+                    "This result does not establish registration or fraud.",
                 ],
             )
 
-        automated_sources = [
-            source
-            for source in candidate_sources
-            if source.automated_access
-        ]
+        source = candidates[0]
 
-        if not automated_sources:
-            source = candidate_sources[0]
+        if not source.automated_access:
             return RegulatoryVerificationResult(
                 participant_type=request.participant_type,
                 status=AnalysisStatus.UNAVAILABLE,
@@ -116,17 +143,18 @@ class RegistryRegulatoryProvider(RegulatoryVerificationProvider):
                 source_url=source.url,
                 matched=None,
                 explanation=(
-                    "A relevant source is registered, but automated access "
-                    "has not been enabled. No live verification occurred."
+                    "A compatible official source is registered, but "
+                    "automated access is not enabled. No live verification "
+                    "occurred."
                 ),
                 limitations=[
-                    "The source registry contains metadata only.",
+                    f"Required capability: {capability.value}.",
+                    "The registry contains source metadata only.",
                     "No authoritative record was retrieved or matched.",
                     "Manual review of the official source may be required.",
                 ],
             )
 
-        source = automated_sources[0]
         return RegulatoryVerificationResult(
             participant_type=request.participant_type,
             status=AnalysisStatus.UNAVAILABLE,
@@ -136,12 +164,12 @@ class RegistryRegulatoryProvider(RegulatoryVerificationProvider):
             source_url=source.url,
             matched=None,
             explanation=(
-                "The source is marked for automated access, but this provider "
-                "does not yet implement a live retrieval adapter."
+                "A compatible source is configured for automated access, "
+                "but no live retrieval adapter is implemented by this "
+                "provider. No verification occurred."
             ),
             limitations=[
-                "Automated source access is configured but not implemented "
-                "by this provider.",
+                f"Required capability: {capability.value}.",
                 "No authoritative record was retrieved or matched.",
             ],
         )
