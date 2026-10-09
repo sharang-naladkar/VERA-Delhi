@@ -63,6 +63,11 @@ class APKAnalyzerProvider(BaseProvider):
                     )
 
                 names = archive.namelist()
+                native_library_count = sum(
+                    1
+                    for name in names
+                    if name.startswith("lib/") and name.endswith(".so")
+                )
 
                 return {
                     "status": "SUCCESS",
@@ -79,6 +84,8 @@ class APKAnalyzerProvider(BaseProvider):
                             if name.startswith("classes") and name.endswith(".dex")
                         ),
                         "has_resources": "resources.arsc" in names,
+                        "native_library_count": native_library_count,
+                        "has_native_libraries": native_library_count > 0,
                         "has_certificate_directory": any(
                             name.startswith("META-INF/") for name in names
                         ),

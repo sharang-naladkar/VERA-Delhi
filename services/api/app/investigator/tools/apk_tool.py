@@ -8,6 +8,7 @@ from app.contracts.evidence import EvidenceContract
 from app.contracts.status import AnalysisStatus, EvidenceType, SeverityLevel
 from app.investigator.tools.base import InvestigationTool, ToolResult
 from app.providers.apk_analyzer import APKAnalyzerProvider
+from app.providers.apk_static_features import APKStaticFeatureExtractor
 
 
 class APKIntelligenceTool(InvestigationTool):
@@ -23,8 +24,12 @@ class APKIntelligenceTool(InvestigationTool):
     def __init__(
         self,
         analyzer: APKAnalyzerProvider | None = None,
+        feature_extractor: APKStaticFeatureExtractor | None = None,
     ) -> None:
         self.analyzer = analyzer or APKAnalyzerProvider()
+        self.feature_extractor = (
+            feature_extractor or APKStaticFeatureExtractor()
+        )
 
     async def execute(self, state: dict[str, Any]) -> ToolResult:
         """Execute deterministic APK intelligence."""
@@ -123,6 +128,29 @@ class APKIntelligenceTool(InvestigationTool):
                     )
                 )
 
+            static_features = {
+                "status": AnalysisStatus.INSUFFICIENT_EVIDENCE.value,
+                "feature_vector": {},
+                "feature_count": 0,
+            }
+
+            if (
+                manifest.get("status") == AnalysisStatus.SUCCESS.value
+                and certificates.get("status") == AnalysisStatus.SUCCESS.value
+            ):
+                static_features = self.feature_extractor.extract(
+                    foundation,
+                    manifest,
+                    certificates,
+                )
+
+                evidence.append(
+                    self._build_static_feature_evidence(
+                        investigation_id,
+                        static_features,
+                    )
+                )
+
             return ToolResult(
                 tool_name=self.name,
                 tool_version=self.version,
@@ -132,6 +160,7 @@ class APKIntelligenceTool(InvestigationTool):
                     "apk_analysis": foundation,
                     "manifest_analysis": manifest,
                     "certificate_analysis": certificates,
+                    "static_features": static_features,
                 },
             )
 
@@ -236,6 +265,39 @@ class APKIntelligenceTool(InvestigationTool):
                     for certificate in result.get("certificates", [])
                     if certificate.get("sha256_fingerprint")
                 ],
+            },
+        )
+
+    @staticmethod
+    def _build_static_feature_evidence(
+        investigation_id: Any,
+        result: dict[str, Any],
+    ) -> EvidenceContract:
+        feature_vector = result.get("feature_vector", {})
+
+        return EvidenceContract(
+            investigation_id=investigation_id,
+            type=EvidenceType.FORENSIC_ARTIFACT,
+            category="apk_static_features",
+            severity=SeverityLevel.INFORMATIONAL,
+            confidence=1.0 if result.get("status") == AnalysisStatus.SUCCESS.value else 0.0,
+            description=(
+                "Deterministic static APK feature vector was extracted "
+                f"with {len(feature_vector)} feature(s)."
+            ),
+            source_type="static_analysis",
+            source_name="apk_static_feature_extractor",
+            source_version="1.0.0",
+            status=AnalysisStatus(
+                result.get(
+                    "status",
+                    AnalysisStatus.INSUFFICIENT_EVIDENCE.value,
+                )
+            ),
+            raw_payload=result,
+            metadata={
+                "feature_count": len(feature_vector),
+                "feature_names": sorted(feature_vector.keys()),
             },
         )
 

@@ -96,13 +96,27 @@ async def test_apk_tool_success():
     )
 
     assert result.status == AnalysisStatus.SUCCESS
-    assert len(result.evidence) == 3
+    assert len(result.evidence) == 4
+
+    assert "static_features" in result.output_data
+    assert result.output_data["static_features"]["status"] == "SUCCESS"
+    assert result.output_data["static_features"]["feature_count"] == 18
+
+    feature_evidence = [
+        evidence
+        for evidence in result.evidence
+        if evidence.category == "apk_static_features"
+    ]
+
+    assert len(feature_evidence) == 1
+    assert feature_evidence[0].status == AnalysisStatus.SUCCESS
 
     categories = {e.category for e in result.evidence}
     assert categories == {
         "apk_foundation",
         "apk_manifest_analysis",
         "apk_certificate_analysis",
+        "apk_static_features",
     }
 
     assert result.output_data["manifest_analysis"]["package_name"] == "com.example.test"
