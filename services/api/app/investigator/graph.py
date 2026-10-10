@@ -14,6 +14,8 @@ from app.investigator.tools.base import ToolResult
 from app.investigator.tools.registry import ToolRegistry
 from app.prompts.loader import format_prompt
 from app.providers.llm import LLMProvider
+from app.services.investigation_report import generate_investigation_report
+from app.services.risk_assessment import assess_risk
 
 logger = get_logger("app.investigator.graph")
 
@@ -701,12 +703,43 @@ class InvestigatorGraphBuilder:
         evidence = state.get("evidence", [])
 
         logger.info(
-            f"Collected total {len(evidence)} evidence items "
-            f"for investigation {state.get('investigation_id')}"
+            "Collected total %s evidence items for investigation %s",
+            len(evidence),
+            state.get("investigation_id"),
+        )
+
+        risk_assessment = assess_risk(evidence)
+
+        logger.info(
+            "Risk assessment completed",
+            extra={
+                "extra_fields": {
+                    "investigation_id": state.get("investigation_id"),
+                    "risk_level": risk_assessment["level"],
+                    "risk_score": risk_assessment["score"],
+                    "eligible_factor_count": risk_assessment[
+                        "eligible_factor_count"
+                    ],
+                }
+            },
+        )
+
+        report = generate_investigation_report(
+            investigation_id=str(state.get("investigation_id", "")),
+            status=str(state.get("status", AnalysisStatus.PENDING.value)),
+            evidence=evidence,
+            risk_assessment=risk_assessment,
+            claims=state.get("claims", []),
+            entities=state.get("entities", []),
+            indicators=state.get("indicators", []),
+            errors=state.get("errors", []),
+            warnings=state.get("warnings", []),
         )
 
         return {
             "current_step": "collect_evidence",
+            "risk_assessment": risk_assessment,
+            "investigation_report": report,
         }
 
     async def _finalize_investigation_node(
@@ -763,9 +796,18 @@ class InvestigatorGraphBuilder:
             }
         )
 
+        report = state.get("investigation_report")
+        if report:
+            report = {
+                **report,
+                "investigation_status": final_status,
+            }
+
         return {
             "current_step": "completed",
             "status": final_status,
             "timestamps": timestamps,
             "messages": messages,
+            "risk_assessment": state.get("risk_assessment"),
+            "investigation_report": report,
         }

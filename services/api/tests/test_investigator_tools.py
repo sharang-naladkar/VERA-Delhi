@@ -9,6 +9,7 @@ from app.contracts.status import AnalysisStatus, EvidenceType, SeverityLevel
 from app.investigator.tools.claim_extractor import ClaimExtractorTool
 from app.investigator.tools.entity_extractor import EntityExtractorTool
 from app.investigator.tools.normalizer import InputNormalizerTool
+from app.investigator.schemas import ScamPatternAnalysis
 from app.investigator.tools.pattern_analyzer import ScamPatternAnalyzerTool
 from app.investigator.tools.registry import create_default_registry
 from app.investigator.tools.url_tool import URLIntelligenceTool
@@ -310,3 +311,91 @@ def test_tool_registry() -> None:
     assert "scam_pattern_analyzer" in tools
     assert "url_intelligence" in tools
     assert registry.get("non_existent") is None
+
+
+@pytest.mark.asyncio
+async def test_scam_pattern_analyzer_indicators_without_patterns() -> None:
+    """Indicators alone count as a successful behavioral analysis."""
+    mock_llm = MockLLMProvider(mode="insufficient_evidence")
+    tool = ScamPatternAnalyzerTool(llm_provider=mock_llm)
+
+    state = {
+        "investigation_id": str(uuid4()),
+        "normalized_input": "A short message.",
+        "entities": [],
+        "claims": [],
+    }
+
+    result = await tool.execute(state)
+
+    assert result.status == AnalysisStatus.SUCCESS
+    assert result.output_data["patterns"] == []
+    assert result.output_data["indicators"] == ["insufficient_text_length"]
+    assert len(result.evidence) == 1
+    assert result.evidence[0].category == "scam_behavioral_patterns"
+
+
+@pytest.mark.asyncio
+async def test_scam_pattern_analyzer_empty_patterns_and_indicators() -> None:
+    """An analysis with no patterns or indicators remains partial."""
+    mock_llm = MockLLMProvider(mode="clean")
+    tool = ScamPatternAnalyzerTool(llm_provider=mock_llm)
+
+    state = {
+        "investigation_id": str(uuid4()),
+        "normalized_input": "Quarterly earnings were discussed at the investor presentation.",
+        "entities": [],
+        "claims": [],
+    }
+
+    result = await tool.execute(state)
+
+    assert result.status == AnalysisStatus.PARTIAL
+    assert result.output_data["patterns"] == []
+    assert result.output_data["indicators"] == []
+    assert result.evidence == []
+
+
+class ContradictoryPatternProvider:
+    """Test provider that returns empty findings with a contradictory explanation."""
+
+    provider_name = "test_contradictory_provider"
+    is_available = True
+
+    async def generate_structured(self, schema, prompt, **kwargs):
+        if schema is not ScamPatternAnalysis:
+            raise AssertionError(f"Unexpected schema: {schema.__name__}")
+
+        return ScamPatternAnalysis(
+            patterns=[],
+            indicators=[],
+            explanation="Multiple scam indicators were detected in the supplied text.",
+            confidence=0.95,
+        )
+
+
+@pytest.mark.asyncio
+async def test_scam_pattern_analyzer_flags_contradictory_empty_findings(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Contradictory prose must not create evidence without structured findings."""
+    import logging
+
+    tool = ScamPatternAnalyzerTool(
+        llm_provider=ContradictoryPatternProvider(),  # type: ignore[arg-type]
+    )
+    state = {
+        "investigation_id": str(uuid4()),
+        "normalized_input": "A message about an investment opportunity.",
+        "entities": [],
+        "claims": [],
+    }
+
+    with caplog.at_level(logging.WARNING):
+        result = await tool.execute(state)
+
+    assert result.status == AnalysisStatus.PARTIAL
+    assert result.output_data["patterns"] == []
+    assert result.output_data["indicators"] == []
+    assert result.evidence == []
+    assert "explanation claiming findings" in caplog.text

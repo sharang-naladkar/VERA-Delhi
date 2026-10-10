@@ -22,25 +22,41 @@ class InvestigationModel(Base):
         default=uuid.uuid4,
         index=True,
     )
-    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    title: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    description: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
     status: Mapped[str] = mapped_column(
         String(50),
         default="created",
         nullable=False,
         index=True,
     )
-    vera_version: Mapped[str] = mapped_column(String(20), nullable=False)
+
+    vera_version: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+    )
+
     context_metadata: Mapped[dict[str, Any]] = mapped_column(
         JSON,
         default=dict,
         nullable=False,
     )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),
         nullable=False,
     )
+
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),
@@ -50,6 +66,9 @@ class InvestigationModel(Base):
 
     def to_dict(self) -> dict[str, Any]:
         """Convert model attributes to dictionary."""
+
+        metadata = self.context_metadata or {}
+
         return {
             "id": self.id,
             "title": self.title,
@@ -58,8 +77,12 @@ class InvestigationModel(Base):
             "vera_version": self.vera_version,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
-            "evidence_count": self.context_metadata.get("evidence_count", 0),
-            "evidence": self.context_metadata.get("evidence", []),
-            "result_summary": self.context_metadata.get("result_summary"),
-            "state": self.context_metadata.get("state"),
+            "evidence_count": metadata.get("evidence_count", 0),
+            "evidence": metadata.get("evidence", []),
+            "result_summary": metadata.get("result_summary"),
+            "state": metadata.get("state"),
+            "risk_assessment": metadata.get("risk_assessment"),
+            "investigation_report": metadata.get(
+                "investigation_report"
+            ),
         }

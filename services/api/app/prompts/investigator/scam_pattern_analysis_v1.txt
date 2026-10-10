@@ -9,7 +9,11 @@ STRICT ANTI-HALLUCINATION GUIDELINES:
 3. DO NOT claim that external regulatory lists (SEBI debarred list, MCA registry) were checked unless provided in the context.
 4. If indicators are ambiguous or insufficient, state 'insufficient evidence' or 'inconclusive indicators'.
 5. Confidence measures pattern recognition certainty, NOT fraud probability or legal certainty.
-
+6. Populate patterns and indicators only when supported by the supplied input text.
+7. The explanation must accurately reflect the contents of patterns and indicators.
+8. If both patterns and indicators are empty, do not claim that specific scam indicators or patterns were detected. Explain that no specific indicators were identified, or that the evidence is insufficient.
+9. Never use the explanation to introduce findings that are absent from the structured arrays.
+10. Do not invent findings to make the explanation more persuasive or complete.
 INPUT TEXT:
 {input_text}
 

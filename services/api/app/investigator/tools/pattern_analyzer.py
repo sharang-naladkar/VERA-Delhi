@@ -1,6 +1,7 @@
 """Scam Pattern Analyzer Investigation Tool."""
 
 import json
+import logging
 import time
 from typing import Any
 from uuid import UUID, uuid4
@@ -12,6 +13,9 @@ from app.investigator.schemas import ScamPatternAnalysis
 from app.investigator.tools.base import InvestigationTool, ToolResult
 from app.prompts.loader import format_prompt
 from app.providers.llm import LLMProvider
+
+
+logger = logging.getLogger(__name__)
 
 
 class ScamPatternAnalyzerTool(InvestigationTool):
@@ -117,7 +121,32 @@ class ScamPatternAnalyzerTool(InvestigationTool):
             )
 
         evidence_items: list[EvidenceContract] = []
-        if analysis.patterns or analysis.indicators:
+        has_findings = bool(analysis.patterns or analysis.indicators)
+
+        explanation_lower = analysis.explanation.casefold()
+        claims_detected_findings = any(
+            phrase in explanation_lower
+            for phrase in (
+                "indicators detected",
+                "indicators were detected",
+                "patterns detected",
+                "patterns were detected",
+                "identified multiple indicators",
+                "identified scam indicators",
+                "scam indicators were found",
+            )
+        )
+
+        inconsistent_output = not has_findings and claims_detected_findings
+
+        if inconsistent_output:
+            logger.warning(
+                "Scam pattern analysis returned an explanation claiming findings "
+                "while both structured findings arrays were empty; investigation_id=%s",
+                investigation_id,
+            )
+
+        if has_findings:
             evidence_items.append(
                 EvidenceContract(
                     investigation_id=investigation_id,
@@ -135,7 +164,11 @@ class ScamPatternAnalyzerTool(InvestigationTool):
                 )
             )
 
-        status = AnalysisStatus.SUCCESS if analysis.patterns else AnalysisStatus.PARTIAL
+        status = (
+            AnalysisStatus.SUCCESS
+            if has_findings
+            else AnalysisStatus.PARTIAL
+        )
         duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
         return ToolResult(
             tool_name=self.name,

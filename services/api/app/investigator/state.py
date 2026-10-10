@@ -18,6 +18,7 @@ from app.investigator.schemas import (
 
 class ToolExecutionRecord(BaseModel):
     """Log record of a specialized tool execution."""
+
     tool_name: str
     tool_version: str
     status: AnalysisStatus
@@ -29,6 +30,7 @@ class ToolExecutionRecord(BaseModel):
 
 class InvestigationStateDict(TypedDict, total=False):
     """TypedDict definition for LangGraph state graph."""
+
     investigation_id: str
     input_id: str | None
     input_type: str
@@ -47,6 +49,8 @@ class InvestigationStateDict(TypedDict, total=False):
     scam_pattern_analysis: dict[str, Any] | None
     evidence: list[dict[str, Any]]
     tool_results: list[dict[str, Any]]
+    risk_assessment: dict[str, Any] | None
+    investigation_report: dict[str, Any] | None
     messages: list[dict[str, str]]
     current_step: str
     status: str
@@ -73,6 +77,11 @@ class InvestigationState(BaseModel):
     scam_pattern_analysis: dict[str, Any] | None = None
     evidence: list[dict[str, Any]] = Field(default_factory=list)
     tool_results: list[dict[str, Any]] = Field(default_factory=list)
+
+    # Deterministic risk assessment and structured investigation report.
+    risk_assessment: dict[str, Any] | None = None
+    investigation_report: dict[str, Any] | None = None
+
     messages: list[dict[str, str]] = Field(default_factory=list)
     current_step: str = "initialized"
     status: AnalysisStatus = AnalysisStatus.PENDING
@@ -80,16 +89,21 @@ class InvestigationState(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     llm_metadata: dict[str, Any] = Field(default_factory=dict)
     timestamps: dict[str, str] = Field(
-        default_factory=lambda: {"initialized_at": datetime.now(UTC).isoformat()}
+        default_factory=lambda: {
+            "initialized_at": datetime.now(UTC).isoformat()
+        }
     )
 
     def to_graph_state(self) -> InvestigationStateDict:
-        """Serializes Pydantic state to LangGraph compatible dictionary."""
+        """Serializes Pydantic state to a LangGraph-compatible dictionary."""
+
         return {
             "investigation_id": str(self.investigation_id),
             "input_id": str(self.input_id) if self.input_id else None,
             "input_type": self.input_type,
-            "regulatory_verification_request": self.regulatory_verification_request,
+            "regulatory_verification_request": (
+                self.regulatory_verification_request
+            ),
             "raw_input_reference": self.raw_input_reference,
             "raw_input_text": self.raw_input_text,
             "normalized_input": self.normalized_input,
@@ -100,6 +114,8 @@ class InvestigationState(BaseModel):
             "scam_pattern_analysis": self.scam_pattern_analysis,
             "evidence": self.evidence,
             "tool_results": self.tool_results,
+            "risk_assessment": self.risk_assessment,
+            "investigation_report": self.investigation_report,
             "messages": self.messages,
             "current_step": self.current_step,
             "status": self.status.value,
@@ -110,9 +126,17 @@ class InvestigationState(BaseModel):
         }
 
     @classmethod
-    def from_graph_state(cls, state_dict: InvestigationStateDict) -> "InvestigationState":
-        """Instantiates and validates InvestigationState from a graph state dictionary."""
-        status_val = state_dict.get("status", AnalysisStatus.PENDING.value)
+    def from_graph_state(
+        cls,
+        state_dict: InvestigationStateDict,
+    ) -> "InvestigationState":
+        """Instantiates and validates InvestigationState from graph state."""
+
+        status_val = state_dict.get(
+            "status",
+            AnalysisStatus.PENDING.value,
+        )
+
         try:
             status = AnalysisStatus(status_val)
         except ValueError:
@@ -120,7 +144,11 @@ class InvestigationState(BaseModel):
 
         return cls(
             investigation_id=UUID(state_dict["investigation_id"]),
-            input_id=UUID(state_dict["input_id"]) if state_dict.get("input_id") else None,
+            input_id=(
+                UUID(state_dict["input_id"])
+                if state_dict.get("input_id")
+                else None
+            ),
             input_type=state_dict.get("input_type", "text"),
             regulatory_verification_request=state_dict.get(
                 "regulatory_verification_request"
@@ -135,6 +163,8 @@ class InvestigationState(BaseModel):
             scam_pattern_analysis=state_dict.get("scam_pattern_analysis"),
             evidence=state_dict.get("evidence", []),
             tool_results=state_dict.get("tool_results", []),
+            risk_assessment=state_dict.get("risk_assessment"),
+            investigation_report=state_dict.get("investigation_report"),
             messages=state_dict.get("messages", []),
             current_step=state_dict.get("current_step", "unknown"),
             status=status,
@@ -146,10 +176,13 @@ class InvestigationState(BaseModel):
 
     def add_evidence(self, item: EvidenceContract) -> None:
         """Appends a validated evidence contract to the state."""
+
         self.evidence.append(item.model_dump(mode="json"))
 
     def add_error(self, error: str) -> None:
         """Records an error and updates status fail-safe."""
+
         self.errors.append(error)
+
         if self.status != AnalysisStatus.FAILED:
             self.status = AnalysisStatus.PARTIAL
