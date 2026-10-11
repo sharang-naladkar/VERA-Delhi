@@ -41,9 +41,12 @@ class RegulatorySourceRegistry:
 
     @staticmethod
     def _default_sources() -> list[RegulatorySource]:
-        """Return the initial authoritative source definitions."""
+        """Return the configured regulatory source definitions."""
 
         return [
+            # ---------------------------------------------------------
+            # Existing official and exchange source metadata
+            # ---------------------------------------------------------
             RegulatorySource(
                 source_id="sebi_investment_advisers",
                 name="SEBI Investment Adviser Directory",
@@ -178,6 +181,85 @@ class RegulatorySourceRegistry:
                     "Exchange listing for research analysts. "
                     "Use the source's actual fields and scope when "
                     "reporting a result."
+                ),
+            ),
+
+            # ---------------------------------------------------------
+            # Local SEBI directory snapshots
+            #
+            # These sources represent local Excel snapshots.
+            # They are not live SEBI connections.
+            # ---------------------------------------------------------
+            RegulatorySource(
+                source_id="sebi_investment_adviser_dataset",
+                name="SEBI Investment Adviser Directory Snapshot",
+                authority="Securities and Exchange Board of India",
+                url=(
+                    "https://www.sebi.gov.in/sebiweb/other/"
+                    "OtherAction.do?doRecognisedFpi=yes&intmId=13"
+                ),
+                kind=RegulatorySourceKind.REGULATOR,
+                participant_types=(
+                    RegulatoryParticipantType.INVESTMENT_ADVISER,
+                ),
+                capabilities=(
+                    RegulatoryCapability.REGISTRATION_LOOKUP,
+                    RegulatoryCapability.REGISTRATION_STATUS,
+                    RegulatoryCapability.IDENTITY_MATCH,
+                ),
+                automated_access=False,
+                notes=(
+                    "Local Excel snapshot dated 2026-10-08. "
+                    "A snapshot match establishes a match in the local "
+                    "dataset only, not current live registration."
+                ),
+            ),
+            RegulatorySource(
+                source_id="sebi_portfolio_manager_dataset",
+                name="SEBI Portfolio Manager Directory Snapshot",
+                authority="Securities and Exchange Board of India",
+                url=(
+                    "https://www.sebi.gov.in/sebiweb/other/"
+                    "OtherAction.do?doRecognisedFpi=yes&intmId=33"
+                ),
+                kind=RegulatorySourceKind.REGULATOR,
+                participant_types=(
+                    RegulatoryParticipantType.PORTFOLIO_MANAGER,
+                ),
+                capabilities=(
+                    RegulatoryCapability.REGISTRATION_LOOKUP,
+                    RegulatoryCapability.REGISTRATION_STATUS,
+                    RegulatoryCapability.IDENTITY_MATCH,
+                ),
+                automated_access=False,
+                notes=(
+                    "Local Excel snapshot dated 2026-10-08. "
+                    "A snapshot match establishes a match in the local "
+                    "dataset only, not current live registration."
+                ),
+            ),
+            RegulatorySource(
+                source_id="sebi_research_analyst_dataset",
+                name="SEBI Research Analyst Directory Snapshot",
+                authority="Securities and Exchange Board of India",
+                url=(
+                    "https://www.sebi.gov.in/sebiweb/other/"
+                    "OtherAction.do?doRecognisedFpi=yes&intmId=14"
+                ),
+                kind=RegulatorySourceKind.REGULATOR,
+                participant_types=(
+                    RegulatoryParticipantType.RESEARCH_ANALYST,
+                ),
+                capabilities=(
+                    RegulatoryCapability.REGISTRATION_LOOKUP,
+                    RegulatoryCapability.REGISTRATION_STATUS,
+                    RegulatoryCapability.IDENTITY_MATCH,
+                ),
+                automated_access=False,
+                notes=(
+                    "Local Excel snapshot dated 2026-10-08. "
+                    "A snapshot match establishes a match in the local "
+                    "dataset only, not current live registration."
                 ),
             ),
         ]

@@ -1,4 +1,4 @@
-import pytest
+﻿import pytest
 from pydantic import ValidationError
 
 from app.contracts.regulatory import (
@@ -19,15 +19,22 @@ def test_registry_contains_authoritative_sources():
     registry = RegulatorySourceRegistry()
 
     sources = registry.list_sources()
-
-    assert len(sources) == 6
-
     source_ids = {source.source_id for source in sources}
 
-    assert "sebi_investment_advisers" in source_ids
-    assert "sebi_research_analysts" in source_ids
-    assert "nse_broker_locator" in source_ids
-    assert "bse_member_directory" in source_ids
+    expected_source_ids = {
+        "sebi_investment_advisers",
+        "sebi_research_analysts",
+        "nse_broker_locator",
+        "bse_member_directory",
+        "bse_enlisted_investment_advisers",
+        "bse_enlisted_research_analysts",
+        "sebi_investment_adviser_dataset",
+        "sebi_portfolio_manager_dataset",
+        "sebi_research_analyst_dataset",
+    }
+
+    assert len(sources) == 9
+    assert source_ids == expected_source_ids
 
 
 def test_get_source_returns_registered_source():

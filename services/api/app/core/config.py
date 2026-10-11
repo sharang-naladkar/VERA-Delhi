@@ -59,6 +59,23 @@ class Settings(BaseSettings):
     APK_CLASSIFIER_PROVIDER: str = "unavailable"
     EMBEDDING_PROVIDER: str = "unavailable"
 
+    # SEBI regulatory directory snapshots.
+    #
+    # These are local Excel snapshots, not live SEBI API endpoints.
+    # Docker Compose should mount the original files read-only at these paths.
+    # Environment variables can override the defaults when deploying elsewhere.
+    SEBI_INVESTMENT_ADVISER_DATASET_PATH: str = (
+        "/data/sebi/Investment Adviser as on Oct 08 2026.xls"
+    )
+
+    SEBI_PORTFOLIO_MANAGER_DATASET_PATH: str = (
+        "/data/sebi/Registered Portfolio Managers as on Oct 08 2026.xls"
+    )
+
+    SEBI_RESEARCH_ANALYST_DATASET_PATH: str = (
+        "/data/sebi/Research Analyst as on Oct 08 2026.xls"
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:

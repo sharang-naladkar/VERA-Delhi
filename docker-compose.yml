@@ -73,6 +73,19 @@ services:
       LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.1}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    volumes:
+      - type: bind
+        source: "C:/Users/Siddharth/Downloads/Investment Adviser as on Oct 08 2026.xls"
+        target: "/data/sebi/Investment Adviser as on Oct 08 2026.xls"
+        read_only: true
+      - type: bind
+        source: "C:/Users/Siddharth/Downloads/Registered Portfolio Managers as on Oct 08 2026.xls"
+        target: "/data/sebi/Registered Portfolio Managers as on Oct 08 2026.xls"
+        read_only: true
+      - type: bind
+        source: "C:/Users/Siddharth/Downloads/Research Analyst as on Oct 08 2026.xls"
+        target: "/data/sebi/Research Analyst as on Oct 08 2026.xls"
+        read_only: true
     ports:
       - "8000:8000"
     depends_on:

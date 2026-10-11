@@ -15,6 +15,7 @@ class RegulatoryParticipantType(StrEnum):
     """Types of securities-market participants VERA can assess."""
 
     INVESTMENT_ADVISER = "investment_adviser"
+    PORTFOLIO_MANAGER = "portfolio_manager"
     RESEARCH_ANALYST = "research_analyst"
     STOCKBROKER = "stockbroker"
     AUTHORISED_PERSON = "authorised_person"
