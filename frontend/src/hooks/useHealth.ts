@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { fetchHealth, fetchReadiness } from '../api/health';
-import { HealthResponse, ReadinessResponse } from '../types';
+import type { HealthResponse, ReadinessResponse } from '../types';
 
 export function useHealth(pollIntervalMs = 8000) {
   const [health, setHealth] = useState<HealthResponse | null>(null);
@@ -8,20 +8,29 @@ export function useHealth(pollIntervalMs = 8000) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const checkStatus = async () => {
+  const checkStatus = useCallback(async () => {
     try {
       const [h, r] = await Promise.all([
         fetchHealth().catch(() => null),
-        fetchReadiness().catch((err) => {
-          if (err.details && typeof err.details === 'object' && 'services' in err.details) {
+        fetchReadiness().catch((err: unknown) => {
+          if (
+            err instanceof Error &&
+            'details' in err &&
+            typeof err.details === 'object' &&
+            err.details !== null &&
+            'services' in err.details
+          ) {
             return err.details as ReadinessResponse;
           }
+
           return null;
         }),
       ]);
 
       if (!h) {
-        setError('Backend API is unreachable. Please verify server is running.');
+        setError(
+          'Backend API is unreachable. Please verify server is running.',
+        );
         setHealth(null);
         setReadiness(null);
       } else {
@@ -29,18 +38,35 @@ export function useHealth(pollIntervalMs = 8000) {
         setHealth(h);
         setReadiness(r);
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Backend check failed');
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : 'Backend check failed',
+      );
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    checkStatus();
-    const interval = setInterval(checkStatus, pollIntervalMs);
-    return () => clearInterval(interval);
-  }, [pollIntervalMs]);
+    const initialCheck = window.setTimeout(() => {
+      void checkStatus();
+    }, 0);
 
-  return { health, readiness, loading, error, refresh: checkStatus };
+    const interval = window.setInterval(() => {
+      void checkStatus();
+    }, pollIntervalMs);
+
+    return () => {
+      window.clearTimeout(initialCheck);
+      window.clearInterval(interval);
+    };
+  }, [checkStatus, pollIntervalMs]);
+
+  return {
+    health,
+    readiness,
+    loading,
+    error,
+    refresh: checkStatus,
+  };
 }

@@ -6,7 +6,13 @@ export class ApiError extends Error {
   public requestId?: string;
   public details?: unknown;
 
-  constructor(message: string, code: string, status: number, requestId?: string, details?: unknown) {
+  constructor(
+    message: string,
+    code: string,
+    status: number,
+    requestId?: string,
+    details?: unknown,
+  ) {
     super(message);
     this.name = 'ApiError';
     this.code = code;
@@ -22,12 +28,15 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 export async function apiClient<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
 ): Promise<T> {
   const url = `${BASE_URL}${endpoint}`;
-  
+
   const headers = new Headers(options.headers || {});
-  if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
+  if (
+    !headers.has('Content-Type') &&
+    !(options.body instanceof FormData)
+  ) {
     headers.set('Content-Type', 'application/json');
   }
 
@@ -37,24 +46,44 @@ export async function apiClient<T>(
       headers,
     });
 
-    const isJson = response.headers.get('content-type')?.includes('application/json');
+    const isJson = response.headers
+      .get('content-type')
+      ?.includes('application/json');
+
     const data = isJson ? await response.json() : null;
 
+    // Preserve dependency statuses when readiness returns HTTP 503.
+    // The overall service can be unavailable while the database is ready.
+    if (
+      endpoint === '/health/ready' &&
+      data !== null &&
+      typeof data === 'object' &&
+      'services' in data
+    ) {
+      return data as T;
+    }
+
     if (!response.ok) {
-      if (data && 'error' in data) {
+      if (
+        data !== null &&
+        typeof data === 'object' &&
+        'error' in data
+      ) {
         const err = (data as ApiErrorResponse).error;
+
         throw new ApiError(
           err.message || 'API request failed',
           err.code || 'API_ERROR',
           response.status,
           err.request_id,
-          err.details
+          err.details,
         );
       }
+
       throw new ApiError(
         response.statusText || 'Network request failed',
         'HTTP_ERROR',
-        response.status
+        response.status,
       );
     }
 
@@ -63,10 +92,13 @@ export async function apiClient<T>(
     if (error instanceof ApiError) {
       throw error;
     }
+
     throw new ApiError(
-      error instanceof Error ? error.message : 'Backend connection unavailable',
+      error instanceof Error
+        ? error.message
+        : 'Backend connection unavailable',
       'CONNECTION_FAILED',
-      0
+      0,
     );
   }
 }
